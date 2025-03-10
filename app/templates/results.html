@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}AI Debate - Results{% endblock %}
+
+{% block extra_css %}
+<style>
+    .debate-card {
+        margin-bottom: 2rem;
+    }
+    .pro-argument {
+        background-color: #e8f4f8;
+        border-left: 5px solid #0d6efd;
+    }
+    .con-argument {
+        background-color: #f8f0e8;
+        border-left: 5px solid #fd7e14;
+    }
+    .summary-card {
+        background-color: #f8f9fa;
+        border-left: 5px solid #6c757d;
+    }
+    .argument-header {
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+    .round-title {
+        background-color: #f1f1f1;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 1rem;
+    }
+    .white-space-pre-wrap {
+        white-space: pre-wrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4 shadow">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">Debate Results</h2>
+            </div>
+            <div class="card-body">
+                <h3 class="text-center mb-4">Topic: {{ topic }}</h3>
+                <div class="row text-center mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h5>Pro Side</h5>
+                                <p class="mb-0 fw-bold">{{ pro_llm }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h5>Con Side</h5>
+                                <p class="mb-0 fw-bold">{{ con_llm }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h5>Judge</h5>
+                                <p class="mb-0 fw-bold">{{ judge_llm }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Debate Rounds -->
+{% for round in results.rounds %}
+<div class="debate-card">
+    <h3 class="round-title">Round {{ round.round_number }} of {{ rounds }}</h3>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card pro-argument mb-3">
+                <div class="card-header">
+                    <div class="argument-header">
+                        <span class="badge bg-primary">PRO</span> {{ pro_llm }}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="white-space-pre-wrap">{{ round.pro_argument }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card con-argument mb-3">
+                <div class="card-header">
+                    <div class="argument-header">
+                        <span class="badge bg-warning text-dark">CON</span> {{ con_llm }}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="white-space-pre-wrap">{{ round.con_argument }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Judge Summary -->
+<div class="card summary-card mb-4 shadow">
+    <div class="card-header bg-secondary text-white">
+        <h3 class="mb-0">Summary & Verdict by {{ judge_llm }}</h3>
+    </div>
+    <div class="card-body">
+        <p class="white-space-pre-wrap">{{ results.summary }}</p>
+    </div>
+</div>
+
+<div class="d-grid gap-2 col-md-6 mx-auto mb-5">
+    <a href="/" class="btn btn-primary btn-lg">Start a New Debate</a>
+</div>
+{% endblock %} 

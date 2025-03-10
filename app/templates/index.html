@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}AI Debate - Home{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">Start a New AI Debate</h2>
+            </div>
+            <div class="card-body">
+                <form id="debate-form" action="/debate" method="post">
+                    <div class="mb-3">
+                        <label for="topic" class="form-label">Debate Topic</label>
+                        <input type="text" class="form-control" id="topic" name="topic" required 
+                               placeholder="Enter a topic for the debate...">
+                        <div class="form-text">Be specific and clear about what you want the AIs to debate.</div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="pro_llm" class="form-label">Pro Side</label>
+                            <select class="form-select" id="pro_llm" name="pro_llm">
+                                {% for llm in llm_options %}
+                                <option value="{{ llm }}" {% if llm == "ChatGPT" %}selected{% endif %}>{{ llm }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">AI arguing FOR the topic</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="con_llm" class="form-label">Con Side</label>
+                            <select class="form-select" id="con_llm" name="con_llm">
+                                {% for llm in llm_options %}
+                                <option value="{{ llm }}" {% if llm == "Claude" %}selected{% endif %}>{{ llm }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">AI arguing AGAINST the topic</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="judge_llm" class="form-label">Judge</label>
+                            <select class="form-select" id="judge_llm" name="judge_llm">
+                                {% for llm in llm_options %}
+                                <option value="{{ llm }}" {% if llm == "Gemini" %}selected{% endif %}>{{ llm }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">AI summarizing the debate</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="rounds" class="form-label">Number of Rounds</label>
+                        <input type="number" class="form-control" id="rounds" name="rounds" min="1" max="5" value="2">
+                        <div class="form-text">How many rounds of back-and-forth (1-5)</div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button id="submit-button" type="submit" class="btn btn-primary btn-lg">Start Debate</button>
+                    </div>
+                </form>
+                
+                <!-- Loading indicator -->
+                <div id="loading-indicator" class="loading mt-3 text-center" style="display: none;">
+                    <div class="spinner-border text-primary loading-spinner" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Generating debate... This may take a minute or two.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>About AI Debate</h3>
+            </div>
+            <div class="card-body">
+                <p>This platform allows you to set up debates between different AI language models. Choose a topic, select which AI models will argue for and against it, and watch as they engage in a structured debate.</p>
+                <p>A third AI will act as a judge, summarizing the key points and providing a balanced conclusion.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('debate-form');
+        const submitButton = document.getElementById('submit-button');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        
+        form.addEventListener('submit', function(event) {
+            // Log the form submission
+            console.log('Debate form submitted:', {
+                topic: document.getElementById('topic').value,
+                pro_llm: document.getElementById('pro_llm').value,
+                con_llm: document.getElementById('con_llm').value,
+                judge_llm: document.getElementById('judge_llm').value,
+                rounds: document.getElementById('rounds').value
+            });
+            
+            // Prevent double submission
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+            
+            // Show loading indicator
+            loadingIndicator.style.display = 'block';
+        });
+    });
+</script>
+{% endblock %} 
