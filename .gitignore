@@ -8,3 +8,32 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
+ENV/
+env/
+
+# Logs
+logs/
+*.log
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Environment variables
+.env
+.env.local
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# Temporary files
+*.bak
+*.tmp
+*~

@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}AI Debate - In Progress{% endblock %}
+
+{% block extra_css %}
+<style>
+    .progress-container {
+        margin: 2rem 0;
+    }
+    .progress {
+        height: 25px;
+    }
+    .status-message {
+        margin-top: 1rem;
+        font-size: 1.1rem;
+    }
+    .debate-info {
+        margin-bottom: 2rem;
+    }
+    .spinner-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    .spinner-text {
+        margin-left: 1rem;
+    }
+    .step-item {
+        padding: 0.5rem 1rem;
+        margin-bottom: 0.5rem;
+        border-radius: 5px;
+    }
+    .step-pending {
+        background-color: #f8f9fa;
+        color: #6c757d;
+    }
+    .step-active {
+        background-color: #e8f4f8;
+        border-left: 5px solid #0d6efd;
+        color: #0d6efd;
+        font-weight: bold;
+    }
+    .step-completed {
+        background-color: #d1e7dd;
+        color: #0f5132;
+    }
+    .step-icon {
+        margin-right: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">Generating Debate</h2>
+            </div>
+            <div class="card-body">
+                <div class="debate-info">
+                    <h3 class="text-center mb-3">Topic: {{ topic }}</h3>
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h5>Pro Side</h5>
+                                    <p class="mb-0 fw-bold">{{ pro_llm }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h5>Con Side</h5>
+                                    <p class="mb-0 fw-bold">{{ con_llm }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h5>Judge</h5>
+                                    <p class="mb-0 fw-bold">{{ judge_llm }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="spinner-container">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div class="spinner-text">
+                        <span id="status-message">Initializing debate...</span>
+                    </div>
+                </div>
+
+                <div class="progress-container">
+                    <div class="progress">
+                        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%;" 
+                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                </div>
+
+                <div class="steps-container">
+                    <h4>Debate Progress:</h4>
+                    <div id="steps-list">
+                        <div class="step-item step-active" id="step-init">
+                            <span class="step-icon">⏳</span> Initializing debate...
+                        </div>
+                        <div class="step-item step-pending" id="step-pro-initial">
+                            <span class="step-icon">⏳</span> Getting initial argument from {{ pro_llm }}...
+                        </div>
+                        <div class="step-item step-pending" id="step-con-initial">
+                            <span class="step-icon">⏳</span> Getting initial argument from {{ con_llm }}...
+                        </div>
+                        {% for round_num in range(1, rounds + 1) %}
+                            {% if round_num > 1 %}
+                            <div class="step-item step-pending" id="step-pro-round-{{ round_num }}">
+                                <span class="step-icon">⏳</span> Round {{ round_num }}: Getting response from {{ pro_llm }}...
+                            </div>
+                            <div class="step-item step-pending" id="step-con-round-{{ round_num }}">
+                                <span class="step-icon">⏳</span> Round {{ round_num }}: Getting response from {{ con_llm }}...
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                        <div class="step-item step-pending" id="step-judging">
+                            <span class="step-icon">⏳</span> Getting final summary from {{ judge_llm }}...
+                        </div>
+                        <div class="step-item step-pending" id="step-completed">
+                            <span class="step-icon">⏳</span> Completing debate...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden data for JavaScript -->
+<div id="debate-data" 
+     data-debate-id="{{ debate_id }}" 
+     data-rounds="{{ rounds }}">
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='/js/progress.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const dataElement = document.getElementById('debate-data');
+        const debateId = dataElement.getAttribute('data-debate-id');
+        const rounds = parseInt(dataElement.getAttribute('data-rounds'));
+        
+        // Initialize progress tracking
+        initProgressTracking(debateId, rounds);
+    });
+</script>
+{% endblock %} 
