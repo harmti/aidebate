@@ -3,6 +3,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import logging
 import time
 import os
@@ -12,44 +14,111 @@ from datetime import datetime
 import uuid
 import sys
 import secrets
+import base64
 
 from app.debate_engine import get_llm_function, LLM_OPTIONS
 
-# Ensure logs directory exists
-os.makedirs("logs", exist_ok=True)
+# Ensure logs directory exists with proper permissions
+try:
+    os.makedirs("logs", exist_ok=True)
+    # Try to create a test file to verify write permissions
+    test_file_path = os.path.join("logs", "test_permissions.txt")
+    with open(test_file_path, "w") as f:
+        f.write("Testing write permissions")
+    os.remove(test_file_path)
+except PermissionError:
+    print("WARNING: Permission denied when trying to write to logs directory.")
+    print("Redirecting logs to stdout only.")
+    # Configure logging to stdout only
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler()],
+    )
+else:
+    # Configure logging to both stdout and file
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(), logging.FileHandler("logs/aidebate.log")],
+    )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("logs/aidebate.log")],
-)
 logger = logging.getLogger("aidebate")
 
 # Store for debate progress
 debate_progress = {}
 
-# Initialize security
-security = HTTPBasic()
-
 # Get credentials from environment variables or use defaults
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "debate123")
 
-def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
-    """Validate credentials and return username if valid."""
-    correct_username = secrets.compare_digest(credentials.username, ADMIN_USERNAME)
-    correct_password = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
-    
-    if not (correct_username and correct_password):
-        raise HTTPException(
+
+# Custom authentication middleware
+class BasicAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Paths that don't require authentication
+        excluded_paths = ["/favicon.ico", "/static"]
+
+        # Check if the path is excluded from authentication
+        for path in excluded_paths:
+            if request.url.path.startswith(path):
+                return await call_next(request)
+
+        # Check for Authorization header
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            # No auth header, return 401
+            return self._unauthorized_response()
+
+        # Parse the Authorization header
+        try:
+            scheme, credentials = auth_header.split()
+            if scheme.lower() != "basic":
+                return self._unauthorized_response()
+
+            decoded = base64.b64decode(credentials).decode("utf-8")
+            username, password = decoded.split(":")
+
+            # Validate credentials
+            if not (
+                secrets.compare_digest(username, ADMIN_USERNAME)
+                and secrets.compare_digest(password, ADMIN_PASSWORD)
+            ):
+                return self._unauthorized_response()
+
+            # Add username to request state for logging
+            request.state.username = username
+
+        except Exception as e:
+            logger.error(f"Authentication error: {str(e)}")
+            return self._unauthorized_response()
+
+        # If we get here, authentication was successful
+        return await call_next(request)
+
+    def _unauthorized_response(self):
+        from starlette.responses import Response
+
+        return Response(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
             headers={"WWW-Authenticate": "Basic"},
+            content="Unauthorized",
         )
-    return credentials.username
+
 
 app = FastAPI(title="AI Debate")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add authentication middleware
+app.add_middleware(BasicAuthMiddleware)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -57,15 +126,19 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # Set up Jinja2 templates
 templates = Jinja2Templates(directory="app/templates")
 
-# Serve favicon.ico
+
+# Serve favicon.ico - excluded from authentication by middleware
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
+    """Serve favicon without authentication."""
+    logger.debug("Serving favicon.ico")
     return FileResponse("app/static/favicon.ico")
 
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request, username: str = Depends(get_current_username)):
+async def home(request: Request):
     """Render the home page with the debate form."""
+    username = getattr(request.state, "username", "unknown")
     logger.info(f"Home page accessed by {username} from {request.client.host}")
     return templates.TemplateResponse("index.html", {"request": request, "llm_options": LLM_OPTIONS})
 
@@ -79,9 +152,10 @@ async def create_debate(
     con_llm: str = Form("Claude"),
     judge_llm: str = Form("Gemini"),
     rounds: int = Form(2),
-    username: str = Depends(get_current_username),
 ):
     """Start a debate in the background and redirect to results page."""
+    username = getattr(request.state, "username", "unknown")
+
     # Log the debate request
     logger.info(
         f"Debate requested by {username} - Topic: '{topic}', Pro: {pro_llm}, Con: {con_llm}, Judge: {judge_llm}, Rounds: {rounds}"
@@ -134,11 +208,12 @@ async def create_debate(
 
 
 @app.get("/debate/{debate_id}/progress")
-async def get_debate_progress(debate_id: str, username: str = Depends(get_current_username)):
+async def get_debate_progress(debate_id: str, request: Request):
     """Stream debate progress as server-sent events."""
     if debate_id not in debate_progress:
         raise HTTPException(status_code=404, detail="Debate not found")
 
+    username = getattr(request.state, "username", "unknown")
     logger.info(f"Progress stream requested by {username} for debate {debate_id}")
 
     async def event_generator():
@@ -190,13 +265,14 @@ async def get_debate_progress(debate_id: str, username: str = Depends(get_curren
 
 
 @app.get("/debate/{debate_id}/results", response_class=HTMLResponse)
-async def get_debate_results(request: Request, debate_id: str, username: str = Depends(get_current_username)):
+async def get_debate_results(request: Request, debate_id: str):
     """Get the results of a completed debate."""
     if debate_id not in debate_progress:
         raise HTTPException(status_code=404, detail="Debate not found")
 
+    username = getattr(request.state, "username", "unknown")
     logger.info(f"Results requested by {username} for debate {debate_id}")
-    
+
     debate_data = debate_progress[debate_id]
 
     if not debate_data["completed"]:
