@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir pip-tools && \
 # Copy application code
 COPY app/ ./app/
 COPY run.py ./
+COPY start.py ./
 
 # Replace main.py with the modified version that handles log permissions gracefully
 COPY app/main.py.modified ./app/main.py
@@ -27,5 +28,5 @@ EXPOSE 8000
 # Set environment variable for Railway
 ENV PORT=8000
 
-# Command to run the application - use a more flexible approach
-CMD python -c "import os; port = int(os.environ.get('PORT', 8000)); import uvicorn; uvicorn.run('app.main:app', host='0.0.0.0', port=port)" 
+# Command to run the application - use the start script
+CMD ["python", "start.py"] 

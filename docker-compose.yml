@@ -14,4 +14,4 @@ services:
       - PORT=8000
     # No volume mount for logs - logs will be stored in the container
     restart: unless-stopped
-    command: python -c "import os; port = int(os.environ.get('PORT', 8000)); import uvicorn; uvicorn.run('app.main:app', host='0.0.0.0', port=port)"
+    command: python start.py
