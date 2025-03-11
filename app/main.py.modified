@@ -1,0 +1,54 @@
+from fastapi import FastAPI, Request, Form, HTTPException, BackgroundTasks
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, StreamingResponse
+import logging
+import time
+import os
+import json
+import asyncio
+from datetime import datetime
+import uuid
+import sys
+
+from app.debate_engine import get_llm_function, LLM_OPTIONS
+
+# Ensure logs directory exists with proper permissions
+try:
+    os.makedirs("logs", exist_ok=True)
+    # Try to create a test file to verify write permissions
+    test_file_path = os.path.join("logs", "test_permissions.txt")
+    with open(test_file_path, "w") as f:
+        f.write("Testing write permissions")
+    os.remove(test_file_path)
+except PermissionError:
+    print("WARNING: Permission denied when trying to write to logs directory.")
+    print("Redirecting logs to stdout only.")
+    # Configure logging to stdout only
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler()],
+    )
+else:
+    # Configure logging to both stdout and file
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(), logging.FileHandler("logs/aidebate.log")],
+    )
+
+logger = logging.getLogger("aidebate")
+
+# Store for debate progress
+debate_progress = {}
+
+app = FastAPI(title="AI Debate")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Set up Jinja2 templates
+templates = Jinja2Templates(directory="app/templates")
+
+# Rest of the file remains the same... 

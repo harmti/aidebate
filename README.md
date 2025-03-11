@@ -21,6 +21,8 @@ A web application that facilitates debates between different AI language models 
 
 ## Installation
 
+### Option 1: Standard Installation
+
 1. Clone this repository
 2. Create a virtual environment:
    ```
@@ -30,6 +32,16 @@ A web application that facilitates debates between different AI language models 
 3. Install dependencies:
    ```
    pip install -e .
+   ```
+
+### Option 2: Docker Installation
+
+1. Clone this repository
+2. Make sure you have Docker and Docker Compose installed
+3. Create a `.env` file with your API keys (see Configuration section)
+4. Build and run the Docker container:
+   ```
+   ./run-docker.sh -d
    ```
 
 ## Configuration
@@ -50,7 +62,16 @@ set ANTHROPIC_API_KEY=your-anthropic-api-key
 set GOOGLE_GEMINI_API_KEY=your-google-gemini-api-key
 ```
 
+For Docker, create a `.env` file in the project root with the following content:
+```
+OPENAI_API_KEY=your-openai-api-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
+GOOGLE_GEMINI_API_KEY=your-google-gemini-api-key
+```
+
 ## Running the Application
+
+### Without Docker
 
 You can start the web server in one of two ways:
 
@@ -64,7 +85,35 @@ You can start the web server in one of two ways:
    python -m app.main
    ```
 
+### With Docker
+
+1. Start the container:
+   ```bash
+   ./run-docker.sh -d
+   ```
+
+2. Stop the container:
+   ```bash
+   docker-compose down
+   ```
+
 Then open your browser and navigate to: http://localhost:8000
+
+## Deployment
+
+### Railway Deployment
+
+To deploy this application to Railway:
+
+1. Fork or clone this repository to your GitHub account
+2. Create a new project in Railway and connect it to your GitHub repository
+3. Add the following environment variables in the Railway dashboard:
+   - `OPENAI_API_KEY`
+   - `ANTHROPIC_API_KEY`
+   - `GOOGLE_GEMINI_API_KEY`
+4. Deploy the application
+
+Railway will automatically detect the Procfile and use it to start the application.
 
 ## Project Structure
 
@@ -72,7 +121,8 @@ Then open your browser and navigate to: http://localhost:8000
 aidebate/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py              # FastAPI application
+│   ├── main.py              # FastAPI application (modified for robust logging)
+│   ├── main.py.modified     # Backup of the modified FastAPI application
 │   ├── debate_engine.py     # Core debate functionality
 │   ├── static/
 │   │   └── css/
@@ -82,6 +132,14 @@ aidebate/
 │       ├── index.html       # Home page
 │       └── results.html     # Debate results page
 ├── run.py                   # Entry point script
+├── Dockerfile               # Docker configuration
+├── docker-compose.yml       # Docker Compose configuration
+├── Procfile                 # Procfile for Railway deployment
+├── railway.toml             # Railway-specific configuration
+├── run-docker.sh            # Script to run Docker
+├── debug-docker.sh          # Script to debug Docker container issues
+├── .dockerignore            # Files to exclude from Docker build
+├── .env.example             # Example environment variables
 ├── .venv/                   # Virtual environment (not in repo)
 ├── pyproject.toml           # Project dependencies
 └── README.md                # This file

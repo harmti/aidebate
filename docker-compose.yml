@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  aidebate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_GEMINI_API_KEY=${GOOGLE_GEMINI_API_KEY}
+      - PORT=8000
+    # No volume mount for logs - logs will be stored in the container
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
