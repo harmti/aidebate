@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Form, HTTPException, BackgroundTasks, Depends, status
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -57,7 +57,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "debate123")
 class BasicAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Paths that don't require authentication
-        excluded_paths = ["/favicon.ico", "/static"]
+        excluded_paths = ["/favicon.ico", "/static", "/health"]
 
         # Check if the path is excluded from authentication
         for path in excluded_paths:
@@ -133,6 +133,13 @@ async def favicon():
     """Serve favicon without authentication."""
     logger.debug("Serving favicon.ico")
     return FileResponse("app/static/favicon.ico")
+
+# Health check endpoint for Railway - excluded from authentication by middleware
+@app.get("/health", include_in_schema=False)
+async def health_check():
+    """Health check endpoint for Railway."""
+    logger.debug("Health check requested")
+    return JSONResponse(content={"status": "healthy"}, status_code=200)
 
 
 @app.get("/", response_class=HTMLResponse)
