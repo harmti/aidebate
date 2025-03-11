@@ -16,9 +16,6 @@ COPY app/ ./app/
 COPY run.py ./
 COPY start.py ./
 
-# Replace main.py with the modified version that handles log permissions gracefully
-COPY app/main.py.modified ./app/main.py
-
 # Create logs directory
 RUN mkdir -p logs && chmod 777 logs
 
