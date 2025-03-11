@@ -8,9 +8,14 @@ services:
     ports:
       - "8000:8000"
     environment:
+      # API Keys
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_GEMINI_API_KEY=${GOOGLE_GEMINI_API_KEY}
+      # Basic Authentication
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-debate123}
+      # Port configuration
       - PORT=8000
     # No volume mount for logs - logs will be stored in the container
     restart: unless-stopped

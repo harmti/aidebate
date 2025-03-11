@@ -11,6 +11,8 @@ A web application that facilitates debates between different AI language models 
 - View a structured presentation of the debate with a summary
 - Comprehensive logging of all operations and API calls
 - Protection against double form submission
+- Basic authentication to secure the application
+- Custom favicon
 
 ## Requirements
 
@@ -49,9 +51,14 @@ A web application that facilitates debates between different AI language models 
 Set the following environment variables with your API keys:
 
 ```bash
+# API Keys
 export OPENAI_API_KEY="your-openai-api-key"
 export ANTHROPIC_API_KEY="your-anthropic-api-key"
 export GOOGLE_GEMINI_API_KEY="your-google-gemini-api-key"
+
+# Basic Authentication (optional, defaults shown)
+export ADMIN_USERNAME="admin"
+export ADMIN_PASSWORD="debate123"
 ```
 
 On Windows, use:
@@ -60,13 +67,20 @@ On Windows, use:
 set OPENAI_API_KEY=your-openai-api-key
 set ANTHROPIC_API_KEY=your-anthropic-api-key
 set GOOGLE_GEMINI_API_KEY=your-google-gemini-api-key
+set ADMIN_USERNAME=admin
+set ADMIN_PASSWORD=debate123
 ```
 
 For Docker, create a `.env` file in the project root with the following content:
 ```
+# API Keys
 OPENAI_API_KEY=your-openai-api-key
 ANTHROPIC_API_KEY=your-anthropic-api-key
 GOOGLE_GEMINI_API_KEY=your-google-gemini-api-key
+
+# Basic Authentication (optional, defaults shown)
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=debate123
 ```
 
 ## Running the Application
@@ -140,7 +154,6 @@ aidebate/
 ├── debug-docker.sh          # Script to debug Docker container issues
 ├── .dockerignore            # Files to exclude from Docker build
 ├── .env.example             # Example environment variables
-├── .venv/                   # Virtual environment (not in repo)
 ├── pyproject.toml           # Project dependencies
 └── README.md                # This file
 ```

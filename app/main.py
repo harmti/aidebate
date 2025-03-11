@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Request, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Request, Form, HTTPException, BackgroundTasks, Depends, status
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import logging
 import time
 import os
@@ -9,6 +10,8 @@ import json
 import asyncio
 from datetime import datetime
 import uuid
+import sys
+import secrets
 
 from app.debate_engine import get_llm_function, LLM_OPTIONS
 
@@ -26,6 +29,26 @@ logger = logging.getLogger("aidebate")
 # Store for debate progress
 debate_progress = {}
 
+# Initialize security
+security = HTTPBasic()
+
+# Get credentials from environment variables or use defaults
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "debate123")
+
+def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
+    """Validate credentials and return username if valid."""
+    correct_username = secrets.compare_digest(credentials.username, ADMIN_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
+    
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
 app = FastAPI(title="AI Debate")
 
 # Mount static files
@@ -34,11 +57,16 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # Set up Jinja2 templates
 templates = Jinja2Templates(directory="app/templates")
 
+# Serve favicon.ico
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse("app/static/favicon.ico")
+
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
+async def home(request: Request, username: str = Depends(get_current_username)):
     """Render the home page with the debate form."""
-    logger.info(f"Home page accessed from {request.client.host}")
+    logger.info(f"Home page accessed by {username} from {request.client.host}")
     return templates.TemplateResponse("index.html", {"request": request, "llm_options": LLM_OPTIONS})
 
 
@@ -51,11 +79,12 @@ async def create_debate(
     con_llm: str = Form("Claude"),
     judge_llm: str = Form("Gemini"),
     rounds: int = Form(2),
+    username: str = Depends(get_current_username),
 ):
     """Start a debate in the background and redirect to results page."""
     # Log the debate request
     logger.info(
-        f"Debate requested - Topic: '{topic}', Pro: {pro_llm}, Con: {con_llm}, Judge: {judge_llm}, Rounds: {rounds}"
+        f"Debate requested by {username} - Topic: '{topic}', Pro: {pro_llm}, Con: {con_llm}, Judge: {judge_llm}, Rounds: {rounds}"
     )
 
     # Validate inputs
@@ -105,12 +134,12 @@ async def create_debate(
 
 
 @app.get("/debate/{debate_id}/progress")
-async def get_debate_progress(debate_id: str):
+async def get_debate_progress(debate_id: str, username: str = Depends(get_current_username)):
     """Stream debate progress as server-sent events."""
     if debate_id not in debate_progress:
         raise HTTPException(status_code=404, detail="Debate not found")
 
-    logger.info(f"Progress stream requested for debate {debate_id}")
+    logger.info(f"Progress stream requested by {username} for debate {debate_id}")
 
     async def event_generator():
         # Send initial state immediately
@@ -161,11 +190,13 @@ async def get_debate_progress(debate_id: str):
 
 
 @app.get("/debate/{debate_id}/results", response_class=HTMLResponse)
-async def get_debate_results(request: Request, debate_id: str):
+async def get_debate_results(request: Request, debate_id: str, username: str = Depends(get_current_username)):
     """Get the results of a completed debate."""
     if debate_id not in debate_progress:
         raise HTTPException(status_code=404, detail="Debate not found")
 
+    logger.info(f"Results requested by {username} for debate {debate_id}")
+    
     debate_data = debate_progress[debate_id]
 
     if not debate_data["completed"]:

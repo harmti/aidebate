@@ -3,7 +3,11 @@ builder = "NIXPACKS"
 
 [deploy]
 startCommand = "python start.py"
-healthcheckPath = "/"
+healthcheckPath = "/favicon.ico"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10 
+restartPolicyMaxRetries = 10
+
+[variables]
+ADMIN_USERNAME = { default = "admin" }
+ADMIN_PASSWORD = { default = "debate123" } 
