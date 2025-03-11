@@ -73,7 +73,7 @@ GOOGLE_GEMINI_API_KEY=your-google-gemini-api-key
 
 ### Without Docker
 
-You can start the web server in one of two ways:
+You can start the web server in one of three ways:
 
 1. Using the run script:
    ```bash
@@ -83,6 +83,11 @@ You can start the web server in one of two ways:
 2. Using the module directly:
    ```bash
    python -m app.main
+   ```
+
+3. Using the start script (recommended for production):
+   ```bash
+   python start.py
    ```
 
 ### With Docker
@@ -132,6 +137,7 @@ aidebate/
 │       ├── index.html       # Home page
 │       └── results.html     # Debate results page
 ├── run.py                   # Entry point script
+├── start.py                 # Production start script (used by Railway)
 ├── Dockerfile               # Docker configuration
 ├── docker-compose.yml       # Docker Compose configuration
 ├── Procfile                 # Procfile for Railway deployment

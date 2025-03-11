@@ -28,4 +28,4 @@ EXPOSE 8000
 ENV PORT=8000
 
 # Command to run the application - use a more flexible approach
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} 
+CMD python -c "import os; port = int(os.environ.get('PORT', 8000)); import uvicorn; uvicorn.run('app.main:app', host='0.0.0.0', port=port)" 
