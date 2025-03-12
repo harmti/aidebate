@@ -138,7 +138,8 @@ function initProgressTracking(debateId, roundsCount) {
         // If debate is completed, redirect to results page
         if (data.completed && !data.error) {
             console.log('Debate completed, redirecting to results page');
-            window.location.href = `/debate/${debateId}/results`;
+            const baseUrl = window.location.origin;
+            window.location.href = `${baseUrl}/debate/${debateId}/results`;
         }
         
         // If there was an error, show it
@@ -220,7 +221,14 @@ function initProgressTracking(debateId, roundsCount) {
                 const jsonUrl = `${baseUrl}/debate/${debateId}/progress/json`;
                 console.log(`Polling ${jsonUrl} for updates`);
                 
-                const response = await fetch(jsonUrl);
+                const response = await fetch(jsonUrl, {
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    },
+                    credentials: 'include'
+                });
+                
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -246,12 +254,19 @@ function initProgressTracking(debateId, roundsCount) {
         pollingInterval = setInterval(pollForUpdates, 2000);
     }
     
-    // Initial setup - try EventSource first
+    // Detect if we're in a production environment
+    const isProduction = window.location.hostname !== 'localhost' && 
+                         window.location.hostname !== '127.0.0.1';
+    
+    // Initial setup - use polling in production, try EventSource in development
     let eventSource = null;
     
-    // Check if EventSource is supported
-    if (typeof EventSource !== 'undefined') {
-        console.log('EventSource is supported, using SSE');
+    if (isProduction) {
+        console.log('Production environment detected, using polling method');
+        usingPollingFallback = true;
+        setupPollingFallback();
+    } else if (typeof EventSource !== 'undefined') {
+        console.log('Development environment, EventSource is supported, using SSE');
         eventSource = setupEventSource();
     } else {
         console.log('EventSource is not supported, using polling fallback');
