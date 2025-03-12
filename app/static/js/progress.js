@@ -53,6 +53,10 @@ function initProgressTracking(debateId, roundsCount) {
     let currentStepId = null;
     let currentStepIndex = -1;
     
+    // Track if we're using the fallback polling method
+    let usingPollingFallback = false;
+    let pollingInterval = null;
+    
     // Function to update the progress UI
     function updateProgress(data) {
         console.log('Received progress update:', data);
@@ -151,8 +155,12 @@ function initProgressTracking(debateId, roundsCount) {
     
     // Function to create and set up the EventSource
     function setupEventSource() {
-        console.log(`Setting up EventSource for /debate/${debateId}/progress`);
-        const eventSource = new EventSource(`/debate/${debateId}/progress`);
+        // Get the base URL from the current location
+        const baseUrl = window.location.origin;
+        const progressUrl = `${baseUrl}/debate/${debateId}/progress`;
+        
+        console.log(`Setting up EventSource for ${progressUrl}`);
+        const eventSource = new EventSource(progressUrl);
         
         eventSource.onopen = function() {
             console.log('EventSource connection opened');
@@ -178,19 +186,78 @@ function initProgressTracking(debateId, roundsCount) {
             console.error('EventSource error:', error);
             eventSource.close();
             
-            // Try to reconnect after a delay
-            console.log('Attempting to reconnect in 3 seconds...');
-            setTimeout(() => {
-                const newEventSource = setupEventSource();
-                return newEventSource;
-            }, 3000);
+            // If we're not already using the polling fallback, switch to it
+            if (!usingPollingFallback) {
+                console.log('Switching to polling fallback method');
+                usingPollingFallback = true;
+                setupPollingFallback();
+            } else {
+                // Try to reconnect after a delay
+                console.log('Attempting to reconnect in 3 seconds...');
+                setTimeout(() => {
+                    const newEventSource = setupEventSource();
+                    return newEventSource;
+                }, 3000);
+            }
         };
         
         return eventSource;
     }
     
-    // Initial setup of EventSource
-    let eventSource = setupEventSource();
+    // Function to set up polling fallback
+    function setupPollingFallback() {
+        console.log('Setting up polling fallback');
+        
+        // Clear any existing polling interval
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+        }
+        
+        // Function to poll for updates
+        async function pollForUpdates() {
+            try {
+                const baseUrl = window.location.origin;
+                const jsonUrl = `${baseUrl}/debate/${debateId}/progress/json`;
+                console.log(`Polling ${jsonUrl} for updates`);
+                
+                const response = await fetch(jsonUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Received polling data:', data);
+                updateProgress(data);
+                
+                // If debate is completed or errored, stop polling
+                if (data.completed || data.error) {
+                    console.log('Debate completed or errored, stopping polling');
+                    clearInterval(pollingInterval);
+                }
+            } catch (error) {
+                console.error('Error polling for updates:', error);
+            }
+        }
+        
+        // Poll immediately
+        pollForUpdates();
+        
+        // Then set up interval (every 2 seconds)
+        pollingInterval = setInterval(pollForUpdates, 2000);
+    }
+    
+    // Initial setup - try EventSource first
+    let eventSource = null;
+    
+    // Check if EventSource is supported
+    if (typeof EventSource !== 'undefined') {
+        console.log('EventSource is supported, using SSE');
+        eventSource = setupEventSource();
+    } else {
+        console.log('EventSource is not supported, using polling fallback');
+        usingPollingFallback = true;
+        setupPollingFallback();
+    }
     
     // Set up a check to verify the connection is still active
     let lastActivityTime = Date.now();
@@ -202,10 +269,16 @@ function initProgressTracking(debateId, roundsCount) {
         // If no activity for more than 30 seconds, try to reconnect
         if (inactiveTime > 30000) {
             console.warn('No activity detected for 30 seconds, reconnecting...');
-            if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
+            
+            if (usingPollingFallback) {
+                // If using polling, restart it
+                setupPollingFallback();
+            } else if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
+                // If using SSE, close and reopen
                 eventSource.close();
+                eventSource = setupEventSource();
             }
-            eventSource = setupEventSource();
+            
             lastActivityTime = Date.now();
         }
     }
@@ -217,6 +290,9 @@ function initProgressTracking(debateId, roundsCount) {
     window.addEventListener('beforeunload', function() {
         if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
             eventSource.close();
+        }
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
         }
         clearInterval(connectionCheckInterval);
     });

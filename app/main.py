@@ -134,6 +134,7 @@ async def favicon():
     logger.debug("Serving favicon.ico")
     return FileResponse("app/static/favicon.ico")
 
+
 # Health check endpoint for Railway - excluded from authentication by middleware
 @app.get("/health", include_in_schema=False)
 async def health_check():
@@ -267,8 +268,28 @@ async def get_debate_progress(debate_id: str, request: Request):
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Type": "text/event-stream",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+        },
     )
+
+
+@app.get("/debate/{debate_id}/progress/json")
+async def get_debate_progress_json(debate_id: str, request: Request):
+    """Get debate progress as JSON (non-streaming fallback)."""
+    if debate_id not in debate_progress:
+        raise HTTPException(status_code=404, detail="Debate not found")
+
+    username = getattr(request.state, "username", "unknown")
+    logger.info(f"JSON progress requested by {username} for debate {debate_id}")
+
+    return debate_progress[debate_id]
 
 
 @app.get("/debate/{debate_id}/results", response_class=HTMLResponse)
