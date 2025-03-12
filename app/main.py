@@ -219,32 +219,50 @@ async def create_debate(
 async def get_debate_progress(debate_id: str, request: Request):
     """Stream debate progress as server-sent events."""
     if debate_id not in debate_progress:
+        logger.error(f"Debate {debate_id} not found in progress dictionary")
         raise HTTPException(status_code=404, detail="Debate not found")
 
     username = getattr(request.state, "username", "unknown")
-    logger.info(f"Progress stream requested by {username} for debate {debate_id}")
+    client_host = request.client.host if request.client else "unknown"
+    headers = dict(request.headers)
+
+    logger.info(f"Progress stream requested by {username} from {client_host} for debate {debate_id}")
+    logger.info(f"Request headers: {headers}")
 
     async def event_generator():
         # Send initial state immediately
         initial_data = json.dumps(debate_progress[debate_id])
-        logger.info(f"Sending initial state: {initial_data}")
+        logger.info(f"Sending initial state for debate {debate_id}: {initial_data}")
         yield f"data: {initial_data}\n\n"
 
         # Keep track of last sent data to avoid sending duplicates
         last_data = debate_progress[debate_id].copy()
         last_heartbeat = time.time()
+        connection_start = time.time()
 
         # Continue sending updates until debate is completed or errored
         while True:
             current_time = time.time()
+            connection_duration = current_time - connection_start
+
+            # Log connection duration every 30 seconds
+            if int(connection_duration) % 30 == 0 and int(connection_duration) > 0:
+                logger.info(
+                    f"SSE connection for debate {debate_id} active for {int(connection_duration)} seconds"
+                )
 
             # If debate is completed or errored, send final update and stop
             if debate_progress[debate_id]["completed"] or debate_progress[debate_id].get("error"):
                 # Only send if there's been a change
                 if debate_progress[debate_id] != last_data:
                     final_data = json.dumps(debate_progress[debate_id])
-                    logger.info(f"Sending final update: {debate_progress[debate_id]['status']}")
+                    logger.info(
+                        f"Sending final update for debate {debate_id}: {debate_progress[debate_id]['status']}"
+                    )
                     yield f"data: {final_data}\n\n"
+                logger.info(
+                    f"SSE connection for debate {debate_id} closing after {int(connection_duration)} seconds"
+                )
                 break
 
             # Check if there's been a change
@@ -253,12 +271,14 @@ async def get_debate_progress(debate_id: str, request: Request):
                 last_data = debate_progress[debate_id].copy()
                 last_heartbeat = current_time
                 logger.info(
-                    f"Sending progress update: {debate_progress[debate_id]['status']} - {debate_progress[debate_id]['progress']}%"
+                    f"Sending progress update for debate {debate_id}: {debate_progress[debate_id]['status']} - {debate_progress[debate_id]['progress']}%"
                 )
                 yield f"data: {update_data}\n\n"
             # Send heartbeat every 15 seconds to keep connection alive
             elif current_time - last_heartbeat > 15:
-                logger.debug("Sending heartbeat")
+                logger.info(
+                    f"Sending heartbeat for debate {debate_id} after {int(current_time - last_heartbeat)} seconds"
+                )
                 yield ": heartbeat\n\n"
                 last_heartbeat = current_time
 
@@ -284,12 +304,40 @@ async def get_debate_progress(debate_id: str, request: Request):
 async def get_debate_progress_json(debate_id: str, request: Request):
     """Get debate progress as JSON (non-streaming fallback)."""
     if debate_id not in debate_progress:
+        logger.error(f"Debate {debate_id} not found in progress dictionary for JSON request")
         raise HTTPException(status_code=404, detail="Debate not found")
 
     username = getattr(request.state, "username", "unknown")
-    logger.info(f"JSON progress requested by {username} for debate {debate_id}")
+    client_host = request.client.host if request.client else "unknown"
+    headers = dict(request.headers)
+
+    logger.info(f"JSON progress requested by {username} from {client_host} for debate {debate_id}")
+    logger.info(f"JSON request headers: {headers}")
+    logger.info(f"Returning progress data: {debate_progress[debate_id]}")
 
     return debate_progress[debate_id]
+
+
+@app.get("/debug/connection")
+async def debug_connection(request: Request):
+    """Debug endpoint to check connection details."""
+    headers = dict(request.headers)
+    client_host = request.client.host if request.client else "unknown"
+
+    # Log the connection details
+    logger.info(f"Debug connection from {client_host}")
+    logger.info(f"Headers: {headers}")
+
+    # Return connection details
+    return {
+        "client_ip": client_host,
+        "headers": headers,
+        "server_time": datetime.now().isoformat(),
+        "railway_env": os.environ.get("RAILWAY_ENVIRONMENT", "not_set"),
+        "railway_service": os.environ.get("RAILWAY_SERVICE_NAME", "not_set"),
+        "railway_project": os.environ.get("RAILWAY_PROJECT_NAME", "not_set"),
+        "railway_domain": os.environ.get("RAILWAY_PUBLIC_DOMAIN", "not_set"),
+    }
 
 
 @app.get("/debate/{debate_id}/results", response_class=HTMLResponse)
