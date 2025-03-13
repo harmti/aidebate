@@ -15,5 +15,5 @@ if __name__ == "__main__":
     print(f"Starting AI Debate Platform on port {port}...")
     print(f"Open your browser and navigate to: http://localhost:{port}")
 
-    # Start the application
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port)
+    # Start the application with reduced logging
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, log_level="warning")

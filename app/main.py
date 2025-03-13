@@ -28,20 +28,33 @@ try:
 except PermissionError:
     print("WARNING: Permission denied when trying to write to logs directory.")
     print("Redirecting logs to stdout only.")
-    # Configure logging to stdout only
+    # Configure logging to stdout only with WARNING level
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.WARNING,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler()],
     )
 else:
-    # Configure logging to both stdout and file
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(), logging.FileHandler("logs/aidebate.log")],
-    )
+    # Configure logging with different levels for console and file
+    # Console handler with WARNING level (less verbose)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.WARNING)
+    console_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    console_handler.setFormatter(console_formatter)
 
+    # File handler with INFO level (more detailed)
+    file_handler = logging.FileHandler("logs/aidebate.log")
+    file_handler.setLevel(logging.INFO)
+    file_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(file_formatter)
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+
+# Get logger for this application
 logger = logging.getLogger("aidebate")
 
 # Store for debate progress
