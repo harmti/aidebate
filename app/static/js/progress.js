@@ -57,10 +57,15 @@ function initProgressTracking(debateId, roundsCount) {
   let usingPollingFallback = false;
   let pollingInterval = null;
   let debugInfo = null;
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 5;
 
   // Function to update the progress UI
   function updateProgress(data) {
     console.log("Received progress update:", data);
+
+    // Reset consecutive errors counter on successful update
+    consecutiveErrors = 0;
 
     // Update progress bar
     const progress = data.progress || 0;
@@ -232,6 +237,7 @@ function initProgressTracking(debateId, roundsCount) {
         const baseUrl = window.location.origin;
         const jsonUrl = `${baseUrl}/debate/${debateId}/progress/json`;
         console.log(`Polling ${jsonUrl} for updates`);
+        addDebugInfo(`Polling ${jsonUrl} for updates`);
 
         const response = await fetch(jsonUrl, {
           headers: {
@@ -247,6 +253,7 @@ function initProgressTracking(debateId, roundsCount) {
 
         const data = await response.json();
         console.log("Received polling data:", data);
+        addDebugInfo(`Received polling data: status=${data.status}, progress=${data.progress}%`);
         updateProgress(data);
 
         // If debate is completed or errored, stop polling
@@ -259,8 +266,17 @@ function initProgressTracking(debateId, roundsCount) {
         console.error("Error polling for updates:", error);
         addDebugInfo(`Error polling for updates: ${error.message}`);
 
+        // Increment consecutive errors counter
+        consecutiveErrors++;
+
         // If we get too many consecutive errors, try to fetch debug info
-        fetchDebugInfo();
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          addDebugInfo(`${consecutiveErrors} consecutive errors, fetching debug info`);
+          fetchDebugInfo();
+
+          // Try alternative polling approach with direct URL
+          tryAlternativePolling();
+        }
       }
     }
 
@@ -269,6 +285,37 @@ function initProgressTracking(debateId, roundsCount) {
 
     // Then set up interval (every 2 seconds)
     pollingInterval = setInterval(pollForUpdates, 2000);
+  }
+
+  // Function to try alternative polling approach
+  async function tryAlternativePolling() {
+    try {
+      // Try with absolute URL including protocol
+      const fullUrl = window.location.origin + `/debate/${debateId}/progress/json`;
+      addDebugInfo(`Trying alternative polling with: ${fullUrl}`);
+
+      const response = await fetch(fullUrl, {
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+        credentials: "include",
+        mode: "cors", // Try with CORS mode
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      addDebugInfo(`Alternative polling successful: ${data.status}, ${data.progress}%`);
+      updateProgress(data);
+
+      // Reset consecutive errors
+      consecutiveErrors = 0;
+    } catch (error) {
+      addDebugInfo(`Alternative polling failed: ${error.message}`);
+    }
   }
 
   // Function to fetch debug information
@@ -296,6 +343,8 @@ function initProgressTracking(debateId, roundsCount) {
 
       // Add debug info to the page
       addDebugInfo(`Debug info: Client IP: ${data.client_ip}, Railway Env: ${data.railway_env}`);
+      addDebugInfo(`Railway Domain: ${data.railway_domain}`);
+      addDebugInfo(`Server Time: ${data.server_time}`);
 
       // Create a hidden debug element with all the info
       const debugElement = document.createElement("div");
@@ -305,6 +354,7 @@ function initProgressTracking(debateId, roundsCount) {
       document.body.appendChild(debugElement);
     } catch (error) {
       console.error("Error fetching debug info:", error);
+      addDebugInfo(`Error fetching debug info: ${error.message}`);
     }
   }
 
@@ -331,10 +381,24 @@ function initProgressTracking(debateId, roundsCount) {
 
       // Add it after the steps container
       const stepsContainer = document.querySelector(".steps-container");
-      stepsContainer.parentNode.insertBefore(debugContainer, stepsContainer.nextSibling);
+      if (stepsContainer) {
+        stepsContainer.parentNode.insertBefore(debugContainer, stepsContainer.nextSibling);
+      } else {
+        // Fallback if steps container not found
+        const stepsList = document.getElementById("steps-list");
+        if (stepsList) {
+          stepsList.parentNode.appendChild(debugContainer);
+        } else {
+          // Last resort, add to body
+          document.body.appendChild(debugContainer);
+        }
+      }
 
-      // Initially hide the messages
-      document.getElementById("debug-messages").style.display = "none";
+      // Initially show the messages in production for debugging
+      const messagesDiv = document.getElementById("debug-messages");
+      const isProduction =
+        window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+      messagesDiv.style.display = isProduction ? "block" : "none";
     }
 
     // Add the message
@@ -343,33 +407,30 @@ function initProgressTracking(debateId, roundsCount) {
     messageElement.className = "debug-message";
     messageElement.innerHTML = `<small>[${new Date().toISOString()}] ${message}</small>`;
     messagesDiv.appendChild(messageElement);
+
+    // Also log to console
+    console.log(`[DEBUG] ${message}`);
   }
 
   // Detect if we're in a production environment
   const isProduction =
     window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
 
-  // Initial setup - use polling in production, try EventSource in development
+  // Initial setup - always use polling in production, try EventSource in development
   let eventSource = null;
 
   // Always fetch debug info at startup
   fetchDebugInfo();
 
-  if (isProduction) {
-    console.log("Production environment detected, using polling method");
-    addDebugInfo("Production environment detected, using polling method");
-    usingPollingFallback = true;
-    setupPollingFallback();
-  } else if (typeof EventSource !== "undefined") {
-    console.log("Development environment, EventSource is supported, using SSE");
-    addDebugInfo("Development environment, EventSource is supported, using SSE");
-    eventSource = setupEventSource();
-  } else {
-    console.log("EventSource is not supported, using polling fallback");
-    addDebugInfo("EventSource is not supported, using polling fallback");
-    usingPollingFallback = true;
-    setupPollingFallback();
-  }
+  // Add environment info to debug
+  addDebugInfo(`Environment: ${isProduction ? "Production" : "Development"}`);
+  addDebugInfo(`Hostname: ${window.location.hostname}`);
+  addDebugInfo(`Origin: ${window.location.origin}`);
+  addDebugInfo(`Debate ID: ${debateId}, Rounds: ${roundsCount}`);
+
+  // Always use polling in Railway environment
+  usingPollingFallback = true;
+  setupPollingFallback();
 
   // Set up a check to verify the connection is still active
   let lastActivityTime = Date.now();
@@ -378,10 +439,10 @@ function initProgressTracking(debateId, roundsCount) {
   function checkConnection() {
     const inactiveTime = Date.now() - lastActivityTime;
 
-    // If no activity for more than 30 seconds, try to reconnect
-    if (inactiveTime > 30000) {
-      console.warn("No activity detected for 30 seconds, reconnecting...");
-      addDebugInfo("No activity detected for 30 seconds, reconnecting...");
+    // If no activity for more than 20 seconds, try to reconnect
+    if (inactiveTime > 20000) {
+      console.warn("No activity detected for 20 seconds, reconnecting...");
+      addDebugInfo("No activity detected for 20 seconds, reconnecting...");
 
       if (usingPollingFallback) {
         // If using polling, restart it

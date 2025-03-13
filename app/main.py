@@ -3,11 +3,14 @@ import base64
 import json
 import logging
 import os
+import platform
 import secrets
+import sys
 import time
 import uuid
 from datetime import datetime
 
+import psutil
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
@@ -80,8 +83,7 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
 
             # Validate credentials
             if not (
-                secrets.compare_digest(username, ADMIN_USERNAME)
-                and secrets.compare_digest(password, ADMIN_PASSWORD)
+                secrets.compare_digest(username, ADMIN_USERNAME) and secrets.compare_digest(password, ADMIN_PASSWORD)
             ):
                 return self._unauthorized_response()
 
@@ -218,128 +220,169 @@ async def create_debate(
 @app.get("/debate/{debate_id}/progress")
 async def get_debate_progress(debate_id: str, request: Request):
     """Stream debate progress as server-sent events."""
-    if debate_id not in debate_progress:
-        logger.error(f"Debate {debate_id} not found in progress dictionary")
-        raise HTTPException(status_code=404, detail="Debate not found")
+    try:
+        if debate_id not in debate_progress:
+            logger.error(f"Debate {debate_id} not found in progress dictionary")
+            return JSONResponse(status_code=404, content={"error": "Debate not found", "debate_id": debate_id})
 
-    username = getattr(request.state, "username", "unknown")
-    client_host = request.client.host if request.client else "unknown"
-    headers = dict(request.headers)
+        username = getattr(request.state, "username", "unknown")
+        client_host = request.client.host if request.client else "unknown"
+        headers = dict(request.headers)
 
-    logger.info(f"Progress stream requested by {username} from {client_host} for debate {debate_id}")
-    logger.info(f"Request headers: {headers}")
+        logger.info(f"Progress stream requested by {username} from {client_host} for debate {debate_id}")
+        logger.info(f"Request headers: {headers}")
+        logger.info(f"Available debates: {list(debate_progress.keys())}")
 
-    async def event_generator():
-        # Send initial state immediately
-        initial_data = json.dumps(debate_progress[debate_id])
-        logger.info(f"Sending initial state for debate {debate_id}: {initial_data}")
-        yield f"data: {initial_data}\n\n"
+        async def event_generator():
+            try:
+                # Send initial state immediately
+                initial_data = json.dumps(debate_progress[debate_id])
+                logger.info(f"Sending initial state for debate {debate_id}: {initial_data}")
+                yield f"data: {initial_data}\n\n"
 
-        # Keep track of last sent data to avoid sending duplicates
-        last_data = debate_progress[debate_id].copy()
-        last_heartbeat = time.time()
-        connection_start = time.time()
-
-        # Continue sending updates until debate is completed or errored
-        while True:
-            current_time = time.time()
-            connection_duration = current_time - connection_start
-
-            # Log connection duration every 30 seconds
-            if int(connection_duration) % 30 == 0 and int(connection_duration) > 0:
-                logger.info(
-                    f"SSE connection for debate {debate_id} active for {int(connection_duration)} seconds"
-                )
-
-            # If debate is completed or errored, send final update and stop
-            if debate_progress[debate_id]["completed"] or debate_progress[debate_id].get("error"):
-                # Only send if there's been a change
-                if debate_progress[debate_id] != last_data:
-                    final_data = json.dumps(debate_progress[debate_id])
-                    logger.info(
-                        f"Sending final update for debate {debate_id}: {debate_progress[debate_id]['status']}"
-                    )
-                    yield f"data: {final_data}\n\n"
-                logger.info(
-                    f"SSE connection for debate {debate_id} closing after {int(connection_duration)} seconds"
-                )
-                break
-
-            # Check if there's been a change
-            if debate_progress[debate_id] != last_data:
-                update_data = json.dumps(debate_progress[debate_id])
+                # Keep track of last sent data to avoid sending duplicates
                 last_data = debate_progress[debate_id].copy()
-                last_heartbeat = current_time
-                logger.info(
-                    f"Sending progress update for debate {debate_id}: "
-                    f"{debate_progress[debate_id]['status']} - {debate_progress[debate_id]['progress']}%"
-                )
-                yield f"data: {update_data}\n\n"
-            # Send heartbeat every 15 seconds to keep connection alive
-            elif current_time - last_heartbeat > 15:
-                logger.info(
-                    f"Sending heartbeat for debate {debate_id} after "
-                    f"{int(current_time - last_heartbeat)} seconds"
-                )
-                yield ": heartbeat\n\n"
-                last_heartbeat = current_time
+                last_heartbeat = time.time()
+                connection_start = time.time()
 
-            # Wait before checking again
-            await asyncio.sleep(0.5)
+                # Continue sending updates until debate is completed or errored
+                while True:
+                    current_time = time.time()
+                    connection_duration = current_time - connection_start
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-            "Content-Type": "text/event-stream",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
-        },
-    )
+                    # Log connection duration every 15 seconds
+                    if int(connection_duration) % 15 == 0 and int(connection_duration) > 0:
+                        logger.info(
+                            f"SSE connection for debate {debate_id} active for {int(connection_duration)} seconds"
+                        )
+
+                    # If debate is completed or errored, send final update and stop
+                    if debate_progress[debate_id]["completed"] or debate_progress[debate_id].get("error"):
+                        # Only send if there's been a change
+                        if debate_progress[debate_id] != last_data:
+                            final_data = json.dumps(debate_progress[debate_id])
+                            logger.info(
+                                f"Sending final update for debate {debate_id}: {debate_progress[debate_id]['status']}"
+                            )
+                            yield f"data: {final_data}\n\n"
+                        logger.info(
+                            f"SSE connection for debate {debate_id} closing after {int(connection_duration)} seconds"
+                        )
+                        break
+
+                    # Check if there's been a change
+                    if debate_progress[debate_id] != last_data:
+                        update_data = json.dumps(debate_progress[debate_id])
+                        last_data = debate_progress[debate_id].copy()
+                        last_heartbeat = current_time
+                        logger.info(
+                            f"Sending progress update for debate {debate_id}: "
+                            f"{debate_progress[debate_id]['status']} - {debate_progress[debate_id]['progress']}%"
+                        )
+                        yield f"data: {update_data}\n\n"
+                    # Send heartbeat every 5 seconds to keep connection alive (reduced from 15)
+                    elif current_time - last_heartbeat > 5:
+                        logger.info(
+                            f"Sending heartbeat for debate {debate_id} after "
+                            f"{int(current_time - last_heartbeat)} seconds"
+                        )
+                        yield ": heartbeat\n\n"
+                        last_heartbeat = current_time
+
+                    # Wait before checking again (reduced from 0.5)
+                    await asyncio.sleep(0.2)
+            except Exception as e:
+                logger.exception(f"Error in SSE event generator for debate {debate_id}: {str(e)}")
+                error_data = json.dumps({"error": f"Server error: {str(e)}", "debate_id": debate_id})
+                yield f"data: {error_data}\n\n"
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "Content-Type": "text/event-stream",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Transfer-Encoding": "chunked",
+            },
+        )
+    except Exception as e:
+        logger.exception(f"Error setting up SSE for debate {debate_id}: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}", "debate_id": debate_id})
 
 
 @app.get("/debate/{debate_id}/progress/json")
 async def get_debate_progress_json(debate_id: str, request: Request):
     """Get debate progress as JSON (non-streaming fallback)."""
-    if debate_id not in debate_progress:
-        logger.error(f"Debate {debate_id} not found in progress dictionary for JSON request")
-        raise HTTPException(status_code=404, detail="Debate not found")
+    try:
+        if debate_id not in debate_progress:
+            logger.error(f"Debate {debate_id} not found in progress dictionary for JSON request")
+            return JSONResponse(status_code=404, content={"error": "Debate not found", "debate_id": debate_id})
 
-    username = getattr(request.state, "username", "unknown")
-    client_host = request.client.host if request.client else "unknown"
-    headers = dict(request.headers)
+        username = getattr(request.state, "username", "unknown")
+        client_host = request.client.host if request.client else "unknown"
+        headers = dict(request.headers)
 
-    logger.info(f"JSON progress requested by {username} from {client_host} for debate {debate_id}")
-    logger.info(f"JSON request headers: {headers}")
-    logger.info(f"Returning progress data: {debate_progress[debate_id]}")
+        # Log more detailed information
+        logger.info(f"JSON progress requested by {username} from {client_host} for debate {debate_id}")
+        logger.info(f"JSON request headers: {headers}")
+        logger.info(f"Available debates: {list(debate_progress.keys())}")
+        logger.info(f"Returning progress data: {debate_progress[debate_id]}")
 
-    return debate_progress[debate_id]
+        # Add CORS headers for Railway
+        response = JSONResponse(content=debate_progress[debate_id])
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        response.headers["Cache-Control"] = "no-cache"
+
+        return response
+    except Exception as e:
+        logger.exception(f"Error in get_debate_progress_json: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}", "debate_id": debate_id})
 
 
 @app.get("/debug/connection")
 async def debug_connection(request: Request):
     """Debug endpoint to check connection details."""
-    headers = dict(request.headers)
-    client_host = request.client.host if request.client else "unknown"
+    try:
+        headers = dict(request.headers)
+        client_host = request.client.host if request.client else "unknown"
 
-    # Log the connection details
-    logger.info(f"Debug connection from {client_host}")
-    logger.info(f"Headers: {headers}")
+        # Log the connection details
+        logger.info(f"Debug connection from {client_host}")
+        logger.info(f"Headers: {headers}")
 
-    # Return connection details
-    return {
-        "client_ip": client_host,
-        "headers": headers,
-        "server_time": datetime.now().isoformat(),
-        "railway_env": os.environ.get("RAILWAY_ENVIRONMENT", "not_set"),
-        "railway_service": os.environ.get("RAILWAY_SERVICE_NAME", "not_set"),
-        "railway_project": os.environ.get("RAILWAY_PROJECT_NAME", "not_set"),
-        "railway_domain": os.environ.get("RAILWAY_PUBLIC_DOMAIN", "not_set"),
-    }
+        # Get active debates
+        active_debates = list(debate_progress.keys())
+
+        # Return connection details
+        response_data = {
+            "client_ip": client_host,
+            "headers": headers,
+            "server_time": datetime.now().isoformat(),
+            "railway_env": os.environ.get("RAILWAY_ENVIRONMENT", "not_set"),
+            "railway_service": os.environ.get("RAILWAY_SERVICE_NAME", "not_set"),
+            "railway_project": os.environ.get("RAILWAY_PROJECT_NAME", "not_set"),
+            "railway_domain": os.environ.get("RAILWAY_PUBLIC_DOMAIN", "not_set"),
+            "active_debates": active_debates,
+            "app_version": "1.1.0",  # Add version for tracking
+        }
+
+        # Add CORS headers
+        response = JSONResponse(content=response_data)
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+
+        return response
+    except Exception as e:
+        logger.exception(f"Error in debug_connection: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}"})
 
 
 @app.get("/debate/{debate_id}/results", response_class=HTMLResponse)
@@ -390,9 +433,68 @@ async def get_debate_results(request: Request, debate_id: str):
     )
 
 
-async def run_debate_background(
-    debate_id: str, topic: str, pro_llm: str, con_llm: str, judge_llm: str, rounds: int
-):
+@app.get("/railway/debug", include_in_schema=False)
+async def railway_debug(request: Request):
+    """Special debug endpoint for Railway deployments."""
+    try:
+        # Get basic request info
+        client_host = request.client.host if request.client else "unknown"
+        headers = dict(request.headers)
+
+        # Get Railway environment variables
+        railway_vars = {k: v for k, v in os.environ.items() if k.startswith("RAILWAY_")}
+
+        # Get active debates
+        active_debates = list(debate_progress.keys())
+        debate_details = {}
+
+        # Get details for each active debate
+        for debate_id in active_debates:
+            debate_details[debate_id] = {
+                "status": debate_progress[debate_id]["status"],
+                "progress": debate_progress[debate_id]["progress"],
+                "completed": debate_progress[debate_id]["completed"],
+                "error": debate_progress[debate_id].get("error", None),
+            }
+
+        # Collect system info
+        system_info = {
+            "python_version": sys.version,
+            "platform": platform.platform(),
+            "memory": psutil.virtual_memory()._asdict() if "psutil" in sys.modules else "psutil not available",
+            "cpu_count": os.cpu_count(),
+            "process_id": os.getpid(),
+            "working_directory": os.getcwd(),
+        }
+
+        # Log the request
+        logger.info(f"Railway debug request from {client_host}")
+
+        # Return comprehensive debug info
+        response_data = {
+            "timestamp": datetime.now().isoformat(),
+            "client_ip": client_host,
+            "headers": headers,
+            "railway_environment": railway_vars,
+            "active_debates": active_debates,
+            "debate_details": debate_details,
+            "system_info": system_info,
+            "app_version": "1.1.0",
+        }
+
+        # Add CORS headers
+        response = JSONResponse(content=response_data)
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+
+        return response
+    except Exception as e:
+        logger.exception(f"Error in railway_debug: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}"})
+
+
+async def run_debate_background(debate_id: str, topic: str, pro_llm: str, con_llm: str, judge_llm: str, rounds: int):
     """Run the debate in the background and update progress."""
     start_time = time.time()
 
@@ -507,13 +609,10 @@ async def run_debate_background(
                 logger.info(f"Getting pro counter-argument for round {round_num + 1}")
                 try:
                     pro_counter_prompt = (
-                        f"Your opponent argued: {con_argument}\n\n"
-                        f"Counter their argument while supporting: {topic}."
+                        f"Your opponent argued: {con_argument}\n\nCounter their argument while supporting: {topic}."
                     )
                     pro_argument = pro_model(pro_counter_prompt)
-                    logger.info(
-                        f"Received pro counter-argument for round {round_num + 1} ({len(pro_argument)} chars)"
-                    )
+                    logger.info(f"Received pro counter-argument for round {round_num + 1} ({len(pro_argument)} chars)")
                 except Exception as e:
                     logger.error(f"Error getting pro counter-argument: {str(e)}")
                     raise ValueError(f"Error getting response from {pro_llm}: {str(e)}")
@@ -526,13 +625,10 @@ async def run_debate_background(
                 logger.info(f"Getting con counter-argument for round {round_num + 1}")
                 try:
                     con_counter_prompt = (
-                        f"Your opponent argued: {pro_argument}\n\n"
-                        f"Counter their argument while opposing: {topic}."
+                        f"Your opponent argued: {pro_argument}\n\nCounter their argument while opposing: {topic}."
                     )
                     con_argument = con_model(con_counter_prompt)
-                    logger.info(
-                        f"Received con counter-argument for round {round_num + 1} ({len(con_argument)} chars)"
-                    )
+                    logger.info(f"Received con counter-argument for round {round_num + 1} ({len(con_argument)} chars)")
                 except Exception as e:
                     logger.error(f"Error getting con counter-argument: {str(e)}")
                     raise ValueError(f"Error getting response from {con_llm}: {str(e)}")
