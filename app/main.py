@@ -59,7 +59,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "debate123")
 class BasicAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Paths that don't require authentication
-        excluded_paths = ["/favicon.ico", "/static", "/health"]
+        excluded_paths = ["/favicon.ico", "/static", "/health", "/debug/https", "/https-check", "/https-test"]
 
         # Check if the path is excluded from authentication
         for path in excluded_paths:
@@ -163,10 +163,18 @@ original_url_for = templates.env.globals["url_for"]
 
 
 def secure_url_for(name, **path_params):
-    url = original_url_for(name, **path_params)
-    if url.startswith("http:") and "RAILWAY_PUBLIC_DOMAIN" in os.environ:
-        url = url.replace("http:", "https:", 1)
-    return url
+    try:
+        url = original_url_for(name, **path_params)
+        if url.startswith("http:") and "RAILWAY_PUBLIC_DOMAIN" in os.environ:
+            url = url.replace("http:", "https:", 1)
+        return url
+    except Exception as e:
+        logger.error(f"Error in secure_url_for: {str(e)}")
+        # Fall back to original path if there's an error
+        if name == "static":
+            path = path_params.get("path", "")
+            return f"/static{path}"
+        return "/"
 
 
 templates.env.globals["url_for"] = secure_url_for
@@ -565,6 +573,36 @@ async def https_debug(request: Request):
             "active_debates": active_debates,
         },
     )
+
+
+@app.get("/https-check", include_in_schema=False)
+async def https_check(request: Request):
+    """Simple endpoint to check if HTTPS is working properly."""
+    client_host = request.client.host if request.client else "unknown"
+    protocol = request.url.scheme
+    forwarded_proto = request.headers.get("x-forwarded-proto", "not set")
+
+    logger.info(f"HTTPS check requested from {client_host}")
+    logger.info(f"Protocol: {protocol}, X-Forwarded-Proto: {forwarded_proto}")
+
+    return JSONResponse(
+        content={
+            "status": "ok",
+            "client_ip": client_host,
+            "protocol": protocol,
+            "x_forwarded_proto": forwarded_proto,
+            "host": request.headers.get("host", "not set"),
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
+
+
+@app.get("/https-test", response_class=HTMLResponse, include_in_schema=False)
+async def https_test():
+    """Serve a simple HTML page to test HTTPS functionality."""
+    with open("app/templates/https_test.html", "r") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
 
 
 async def run_debate_background(debate_id: str, topic: str, pro_llm: str, con_llm: str, judge_llm: str, rounds: int):
