@@ -152,7 +152,6 @@
 
 {% block extra_js %}
 <script src="/static/js/progress.js"></script>
-<script src="/static/js/railway-debug.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const dataElement = document.getElementById('debate-data');
@@ -162,21 +161,6 @@
         // Initialize progress tracking
         if (typeof initProgressTracking === 'function') {
             initProgressTracking(debateId, rounds);
-
-            // Add environment info to the page
-            const isProduction = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
-            if (isProduction) {
-                console.log("Production environment detected, adding Railway debug info");
-                const envInfo = document.createElement('div');
-                envInfo.className = 'alert alert-info mt-3';
-                envInfo.innerHTML = `
-                    <strong>Environment:</strong> Production<br>
-                    <strong>Hostname:</strong> ${window.location.hostname}<br>
-                    <strong>Protocol:</strong> ${window.location.protocol}<br>
-                    <strong>Debate ID:</strong> ${debateId}
-                `;
-                document.querySelector('.steps-container').after(envInfo);
-            }
         } else {
             console.error("initProgressTracking function not found! This could be due to a mixed content error.");
 

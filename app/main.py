@@ -3,14 +3,11 @@ import base64
 import json
 import logging
 import os
-import platform
 import secrets
-import sys
 import time
 import uuid
 from datetime import datetime
 
-import psutil
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
@@ -59,7 +56,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "debate123")
 class BasicAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Paths that don't require authentication
-        excluded_paths = ["/favicon.ico", "/static", "/health", "/debug/https", "/https-check", "/https-test"]
+        excluded_paths = ["/favicon.ico", "/static", "/health"]
 
         # Check if the path is excluded from authentication
         for path in excluded_paths:
@@ -398,45 +395,6 @@ async def get_debate_progress_json(debate_id: str, request: Request):
         return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}", "debate_id": debate_id})
 
 
-@app.get("/debug/connection")
-async def debug_connection(request: Request):
-    """Debug endpoint to check connection details."""
-    try:
-        headers = dict(request.headers)
-        client_host = request.client.host if request.client else "unknown"
-
-        # Log the connection details
-        logger.info(f"Debug connection from {client_host}")
-        logger.info(f"Headers: {headers}")
-
-        # Get active debates
-        active_debates = list(debate_progress.keys())
-
-        # Return connection details
-        response_data = {
-            "client_ip": client_host,
-            "headers": headers,
-            "server_time": datetime.now().isoformat(),
-            "railway_env": os.environ.get("RAILWAY_ENVIRONMENT", "not_set"),
-            "railway_service": os.environ.get("RAILWAY_SERVICE_NAME", "not_set"),
-            "railway_project": os.environ.get("RAILWAY_PROJECT_NAME", "not_set"),
-            "railway_domain": os.environ.get("RAILWAY_PUBLIC_DOMAIN", "not_set"),
-            "active_debates": active_debates,
-            "app_version": "1.1.0",  # Add version for tracking
-        }
-
-        # Add CORS headers
-        response = JSONResponse(content=response_data)
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-
-        return response
-    except Exception as e:
-        logger.exception(f"Error in debug_connection: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}"})
-
-
 @app.get("/debate/{debate_id}/results", response_class=HTMLResponse)
 async def get_debate_results(request: Request, debate_id: str):
     """Get the results of a completed debate."""
@@ -483,126 +441,6 @@ async def get_debate_results(request: Request, debate_id: str):
             "results": debate_data["results"],
         },
     )
-
-
-@app.get("/railway/debug", include_in_schema=False)
-async def railway_debug(request: Request):
-    """Special debug endpoint for Railway deployments."""
-    try:
-        # Get basic request info
-        client_host = request.client.host if request.client else "unknown"
-        headers = dict(request.headers)
-
-        # Get Railway environment variables
-        railway_vars = {k: v for k, v in os.environ.items() if k.startswith("RAILWAY_")}
-
-        # Get active debates
-        active_debates = list(debate_progress.keys())
-        debate_details = {}
-
-        # Get details for each active debate
-        for debate_id in active_debates:
-            debate_details[debate_id] = {
-                "status": debate_progress[debate_id]["status"],
-                "progress": debate_progress[debate_id]["progress"],
-                "completed": debate_progress[debate_id]["completed"],
-                "error": debate_progress[debate_id].get("error", None),
-            }
-
-        # Collect system info
-        system_info = {
-            "python_version": sys.version,
-            "platform": platform.platform(),
-            "memory": psutil.virtual_memory()._asdict() if "psutil" in sys.modules else "psutil not available",
-            "cpu_count": os.cpu_count(),
-            "process_id": os.getpid(),
-            "working_directory": os.getcwd(),
-        }
-
-        # Log the request
-        logger.info(f"Railway debug request from {client_host}")
-
-        # Return comprehensive debug info
-        response_data = {
-            "timestamp": datetime.now().isoformat(),
-            "client_ip": client_host,
-            "headers": headers,
-            "railway_environment": railway_vars,
-            "active_debates": active_debates,
-            "debate_details": debate_details,
-            "system_info": system_info,
-            "app_version": "1.1.0",
-        }
-
-        # Add CORS headers
-        response = JSONResponse(content=response_data)
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-
-        return response
-    except Exception as e:
-        logger.exception(f"Error in railway_debug: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}"})
-
-
-@app.get("/debug/https", response_class=HTMLResponse)
-async def https_debug(request: Request):
-    """Debug page for HTTPS and mixed content issues."""
-    client_host = request.client.host if request.client else "unknown"
-    headers = dict(request.headers)
-
-    # Log the request
-    logger.info(f"HTTPS debug page requested from {client_host}")
-    logger.info(f"Headers: {headers}")
-
-    # Get active debates
-    active_debates = list(debate_progress.keys())
-
-    # Return the debug page
-    return templates.TemplateResponse(
-        "https_debug.html",
-        {
-            "request": request,
-            "client_ip": client_host,
-            "protocol": request.url.scheme,
-            "x_forwarded_proto": headers.get("x-forwarded-proto", "not set"),
-            "host": headers.get("host", "not set"),
-            "railway_env": os.environ.get("RAILWAY_ENVIRONMENT", "not set"),
-            "railway_domain": os.environ.get("RAILWAY_PUBLIC_DOMAIN", "not set"),
-            "active_debates": active_debates,
-        },
-    )
-
-
-@app.get("/https-check", include_in_schema=False)
-async def https_check(request: Request):
-    """Simple endpoint to check if HTTPS is working properly."""
-    client_host = request.client.host if request.client else "unknown"
-    protocol = request.url.scheme
-    forwarded_proto = request.headers.get("x-forwarded-proto", "not set")
-
-    logger.info(f"HTTPS check requested from {client_host}")
-    logger.info(f"Protocol: {protocol}, X-Forwarded-Proto: {forwarded_proto}")
-
-    return JSONResponse(
-        content={
-            "status": "ok",
-            "client_ip": client_host,
-            "protocol": protocol,
-            "x_forwarded_proto": forwarded_proto,
-            "host": request.headers.get("host", "not set"),
-            "timestamp": datetime.now().isoformat(),
-        }
-    )
-
-
-@app.get("/https-test", response_class=HTMLResponse, include_in_schema=False)
-async def https_test():
-    """Serve a simple HTML page to test HTTPS functionality."""
-    with open("app/templates/https_test.html", "r") as f:
-        html_content = f.read()
-    return HTMLResponse(content=html_content)
 
 
 async def run_debate_background(debate_id: str, topic: str, pro_llm: str, con_llm: str, judge_llm: str, rounds: int):
