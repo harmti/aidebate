@@ -60,6 +60,9 @@ function initProgressTracking(debateId, roundsCount) {
   let consecutiveErrors = 0;
   const MAX_CONSECUTIVE_ERRORS = 5;
 
+  // Track if we've tried direct result page access
+  let triedDirectResultAccess = false;
+
   // Function to update the progress UI
   function updateProgress(data) {
     console.log("Received progress update:", data);
@@ -240,11 +243,14 @@ function initProgressTracking(debateId, roundsCount) {
         addDebugInfo(`Polling ${jsonUrl} for updates`);
 
         const response = await fetch(jsonUrl, {
+          method: "GET",
           headers: {
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             Pragma: "no-cache",
+            Expires: "0",
           },
           credentials: "include",
+          mode: "cors",
         });
 
         if (!response.ok) {
@@ -261,6 +267,19 @@ function initProgressTracking(debateId, roundsCount) {
           console.log("Debate completed or errored, stopping polling");
           addDebugInfo("Debate completed or errored, stopping polling");
           clearInterval(pollingInterval);
+
+          // Try direct access to results page if we haven't already
+          if (data.completed && !triedDirectResultAccess) {
+            triedDirectResultAccess = true;
+            tryDirectResultsAccess();
+          }
+        }
+
+        // If progress is high but we're still not redirected, try direct access
+        if (data.progress >= 80 && !triedDirectResultAccess) {
+          addDebugInfo("Progress is high, trying direct results access");
+          triedDirectResultAccess = true;
+          tryDirectResultsAccess();
         }
       } catch (error) {
         console.error("Error polling for updates:", error);
@@ -276,6 +295,12 @@ function initProgressTracking(debateId, roundsCount) {
 
           // Try alternative polling approach with direct URL
           tryAlternativePolling();
+
+          // Also try direct access to results page
+          if (!triedDirectResultAccess) {
+            triedDirectResultAccess = true;
+            tryDirectResultsAccess();
+          }
         }
       }
     }
@@ -287,6 +312,16 @@ function initProgressTracking(debateId, roundsCount) {
     pollingInterval = setInterval(pollForUpdates, 2000);
   }
 
+  // Function to try direct access to results page
+  function tryDirectResultsAccess() {
+    const baseUrl = window.location.origin;
+    const resultsUrl = `${baseUrl}/debate/${debateId}/results`;
+    addDebugInfo(`Trying direct access to results page: ${resultsUrl}`);
+
+    // Open in same window
+    window.location.href = resultsUrl;
+  }
+
   // Function to try alternative polling approach
   async function tryAlternativePolling() {
     try {
@@ -294,25 +329,36 @@ function initProgressTracking(debateId, roundsCount) {
       const fullUrl = window.location.origin + `/debate/${debateId}/progress/json`;
       addDebugInfo(`Trying alternative polling with: ${fullUrl}`);
 
-      const response = await fetch(fullUrl, {
-        headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-        },
-        credentials: "include",
-        mode: "cors", // Try with CORS mode
-      });
+      // Try with XMLHttpRequest instead of fetch
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", fullUrl, true);
+      xhr.setRequestHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      xhr.setRequestHeader("Pragma", "no-cache");
+      xhr.setRequestHeader("Expires", "0");
+      xhr.withCredentials = true;
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            addDebugInfo(`Alternative polling successful: ${data.status}, ${data.progress}%`);
+            updateProgress(data);
 
-      const data = await response.json();
-      addDebugInfo(`Alternative polling successful: ${data.status}, ${data.progress}%`);
-      updateProgress(data);
+            // Reset consecutive errors
+            consecutiveErrors = 0;
+          } catch (e) {
+            addDebugInfo(`Error parsing XHR response: ${e.message}`);
+          }
+        } else {
+          addDebugInfo(`XHR error: ${xhr.status} ${xhr.statusText}`);
+        }
+      };
 
-      // Reset consecutive errors
-      consecutiveErrors = 0;
+      xhr.onerror = function () {
+        addDebugInfo("XHR network error");
+      };
+
+      xhr.send();
     } catch (error) {
       addDebugInfo(`Alternative polling failed: ${error.message}`);
     }
@@ -346,6 +392,14 @@ function initProgressTracking(debateId, roundsCount) {
       addDebugInfo(`Railway Domain: ${data.railway_domain}`);
       addDebugInfo(`Server Time: ${data.server_time}`);
 
+      // Check if there are active debates
+      if (data.active_debates && data.active_debates.includes(debateId)) {
+        addDebugInfo(`Debate ${debateId} is active on server`);
+      } else if (data.active_debates) {
+        addDebugInfo(`Active debates: ${data.active_debates.join(", ")}`);
+        addDebugInfo(`WARNING: Current debate ${debateId} not found in active debates!`);
+      }
+
       // Create a hidden debug element with all the info
       const debugElement = document.createElement("div");
       debugElement.id = "debug-data";
@@ -377,7 +431,16 @@ function initProgressTracking(debateId, roundsCount) {
         messagesDiv.style.display = messagesDiv.style.display === "none" ? "block" : "none";
       };
 
+      // Add a button to try direct results access
+      const resultsButton = document.createElement("button");
+      resultsButton.className = "btn btn-sm btn-primary mt-2 ms-2";
+      resultsButton.textContent = "Go to Results";
+      resultsButton.onclick = function () {
+        tryDirectResultsAccess();
+      };
+
       debugContainer.appendChild(toggleButton);
+      debugContainer.appendChild(resultsButton);
 
       // Add it after the steps container
       const stepsContainer = document.querySelector(".steps-container");
@@ -427,6 +490,12 @@ function initProgressTracking(debateId, roundsCount) {
   addDebugInfo(`Hostname: ${window.location.hostname}`);
   addDebugInfo(`Origin: ${window.location.origin}`);
   addDebugInfo(`Debate ID: ${debateId}, Rounds: ${roundsCount}`);
+  addDebugInfo(`User Agent: ${navigator.userAgent}`);
+
+  // Add browser capability checks
+  addDebugInfo(`Fetch API supported: ${typeof fetch !== "undefined"}`);
+  addDebugInfo(`EventSource supported: ${typeof EventSource !== "undefined"}`);
+  addDebugInfo(`XMLHttpRequest supported: ${typeof XMLHttpRequest !== "undefined"}`);
 
   // Always use polling in Railway environment
   usingPollingFallback = true;
@@ -454,6 +523,13 @@ function initProgressTracking(debateId, roundsCount) {
       }
 
       lastActivityTime = Date.now();
+
+      // If we've been inactive for a long time, try direct results access
+      if (inactiveTime > 60000 && !triedDirectResultAccess) {
+        addDebugInfo("Long inactivity, trying direct results access");
+        triedDirectResultAccess = true;
+        tryDirectResultsAccess();
+      }
     }
   }
 

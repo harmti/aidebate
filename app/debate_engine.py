@@ -30,9 +30,7 @@ def chatgpt_response(prompt: str) -> str:
     logger.info("Requesting response from ChatGPT")
 
     try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4", messages=[{"role": "user", "content": prompt}]
-        )
+        response = openai_client.chat.completions.create(model="gpt-4", messages=[{"role": "user", "content": prompt}])
         result = response.choices[0].message.content
 
         elapsed_time = time.time() - start_time
@@ -179,9 +177,7 @@ def run_debate(
                     f"Your opponent argued: {con_argument}\n\nCounter their argument while supporting: {topic}."
                 )
                 pro_argument = pro_model(pro_counter_prompt)
-                logger.info(
-                    f"Received pro counter-argument for round {round_num + 1} ({len(pro_argument)} chars)"
-                )
+                logger.info(f"Received pro counter-argument for round {round_num + 1} ({len(pro_argument)} chars)")
             except Exception as e:
                 logger.error(f"Error getting pro counter-argument: {str(e)}")
                 raise ValueError(f"Error getting response from {pro_llm}: {str(e)}")
@@ -198,9 +194,7 @@ def run_debate(
                     f"Your opponent argued: {pro_argument}\n\nCounter their argument while opposing: {topic}."
                 )
                 con_argument = con_model(con_counter_prompt)
-                logger.info(
-                    f"Received con counter-argument for round {round_num + 1} ({len(con_argument)} chars)"
-                )
+                logger.info(f"Received con counter-argument for round {round_num + 1} ({len(con_argument)} chars)")
             except Exception as e:
                 logger.error(f"Error getting con counter-argument: {str(e)}")
                 raise ValueError(f"Error getting response from {con_llm}: {str(e)}")

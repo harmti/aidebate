@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <title>{% block title %}AI Debate{% endblock %}</title>
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='/favicon.ico') }}">
@@ -11,6 +12,36 @@
     <!-- Custom CSS -->
     <link href="{{ url_for('static', path='/css/styles.css') }}" rel="stylesheet">
     {% block extra_css %}{% endblock %}
+    <script>
+        // Force HTTPS on Railway
+        if (window.location.hostname.includes('railway.app') && window.location.protocol === 'http:') {
+            window.location.href = window.location.href.replace('http:', 'https:');
+        }
+
+        // Fix for mixed content - ensure all URLs are HTTPS
+        if (window.location.protocol === 'https:') {
+            // Create a MutationObserver to watch for new elements
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes) {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.tagName === 'LINK' || node.tagName === 'SCRIPT' || node.tagName === 'IMG') {
+                                if (node.src && node.src.startsWith('http:')) {
+                                    node.src = node.src.replace('http:', 'https:');
+                                }
+                                if (node.href && node.href.startsWith('http:')) {
+                                    node.href = node.href.replace('http:', 'https:');
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+
+            // Start observing the document
+            observer.observe(document, { childList: true, subtree: true });
+        }
+    </script>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">

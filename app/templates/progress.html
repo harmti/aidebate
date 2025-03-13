@@ -160,20 +160,48 @@
         const rounds = parseInt(dataElement.getAttribute('data-rounds'));
 
         // Initialize progress tracking
-        initProgressTracking(debateId, rounds);
+        if (typeof initProgressTracking === 'function') {
+            initProgressTracking(debateId, rounds);
 
-        // Add environment info to the page
-        const isProduction = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
-        if (isProduction) {
-            console.log("Production environment detected, adding Railway debug info");
-            const envInfo = document.createElement('div');
-            envInfo.className = 'alert alert-info mt-3';
-            envInfo.innerHTML = `
-                <strong>Environment:</strong> Production<br>
-                <strong>Hostname:</strong> ${window.location.hostname}<br>
-                <strong>Debate ID:</strong> ${debateId}
+            // Add environment info to the page
+            const isProduction = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+            if (isProduction) {
+                console.log("Production environment detected, adding Railway debug info");
+                const envInfo = document.createElement('div');
+                envInfo.className = 'alert alert-info mt-3';
+                envInfo.innerHTML = `
+                    <strong>Environment:</strong> Production<br>
+                    <strong>Hostname:</strong> ${window.location.hostname}<br>
+                    <strong>Protocol:</strong> ${window.location.protocol}<br>
+                    <strong>Debate ID:</strong> ${debateId}
+                `;
+                document.querySelector('.steps-container').after(envInfo);
+            }
+        } else {
+            console.error("initProgressTracking function not found! This could be due to a mixed content error.");
+
+            // Create error message
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-danger mt-3';
+            errorDiv.innerHTML = `
+                <strong>Error:</strong> JavaScript functions not loaded properly.<br>
+                <p>This is likely due to a mixed content error. The page is loaded over HTTPS but resources are being requested over HTTP.</p>
+                <p>Try refreshing the page. If the issue persists, please contact the administrator.</p>
+                <p>You can also try to <a href="/debate/${debateId}/results">view the results directly</a>.</p>
             `;
-            document.querySelector('.steps-container').after(envInfo);
+
+            // Add it to the page
+            const container = document.querySelector('.card-body');
+            if (container) {
+                container.appendChild(errorDiv);
+            } else {
+                document.body.appendChild(errorDiv);
+            }
+
+            // Try to redirect to results after a delay
+            setTimeout(function() {
+                window.location.href = `/debate/${debateId}/results`;
+            }, 30000);
         }
     });
 </script>

@@ -107,6 +107,34 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
         )
 
 
+# HTTPS URL rewriting middleware
+class HTTPSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Store original base URL
+        request.state.base_url = str(request.base_url)
+
+        # Check if we're running on Railway with HTTPS
+        is_railway = "RAILWAY_PUBLIC_DOMAIN" in os.environ
+        is_https = request.headers.get("x-forwarded-proto") == "https"
+
+        # Log the protocol information
+        logger.info(
+            f"""Request protocol: {request.url.scheme},
+            X-Forwarded-Proto: {request.headers.get("x-forwarded-proto", "not set")}"""
+        )
+
+        # Process the request
+        response = await call_next(request)
+
+        # If we're on Railway and using HTTPS, ensure all URLs are HTTPS
+        if is_railway and is_https:
+            # Add security headers
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Content-Security-Policy"] = "upgrade-insecure-requests"
+
+        return response
+
+
 app = FastAPI(title="AI Debate")
 
 # Add CORS middleware
@@ -118,14 +146,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add HTTPS middleware (must be before authentication middleware)
+app.add_middleware(HTTPSMiddleware)
+
 # Add authentication middleware
 app.add_middleware(BasicAuthMiddleware)
 
-# Mount static files
+# Mount static files with custom URL generation
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# Set up Jinja2 templates
+# Set up Jinja2 templates with custom URL generation
 templates = Jinja2Templates(directory="app/templates")
+
+# Override the url_for method to ensure HTTPS URLs in Railway environment
+original_url_for = templates.env.globals["url_for"]
+
+
+def secure_url_for(name, **path_params):
+    url = original_url_for(name, **path_params)
+    if url.startswith("http:") and "RAILWAY_PUBLIC_DOMAIN" in os.environ:
+        url = url.replace("http:", "https:", 1)
+    return url
+
+
+templates.env.globals["url_for"] = secure_url_for
 
 
 # Serve favicon.ico - excluded from authentication by middleware
@@ -492,6 +536,35 @@ async def railway_debug(request: Request):
     except Exception as e:
         logger.exception(f"Error in railway_debug: {str(e)}")
         return JSONResponse(status_code=500, content={"error": f"Server error: {str(e)}"})
+
+
+@app.get("/debug/https", response_class=HTMLResponse)
+async def https_debug(request: Request):
+    """Debug page for HTTPS and mixed content issues."""
+    client_host = request.client.host if request.client else "unknown"
+    headers = dict(request.headers)
+
+    # Log the request
+    logger.info(f"HTTPS debug page requested from {client_host}")
+    logger.info(f"Headers: {headers}")
+
+    # Get active debates
+    active_debates = list(debate_progress.keys())
+
+    # Return the debug page
+    return templates.TemplateResponse(
+        "https_debug.html",
+        {
+            "request": request,
+            "client_ip": client_host,
+            "protocol": request.url.scheme,
+            "x_forwarded_proto": headers.get("x-forwarded-proto", "not set"),
+            "host": headers.get("host", "not set"),
+            "railway_env": os.environ.get("RAILWAY_ENVIRONMENT", "not set"),
+            "railway_domain": os.environ.get("RAILWAY_PUBLIC_DOMAIN", "not set"),
+            "active_debates": active_debates,
+        },
+    )
 
 
 async def run_debate_background(debate_id: str, topic: str, pro_llm: str, con_llm: str, judge_llm: str, rounds: int):
