@@ -26,4 +26,4 @@ EXPOSE 8000
 ENV PORT=8000
 
 # Command to run the application - use the start script
-CMD ["python", "start.py"] 
+CMD ["python", "start.py"]

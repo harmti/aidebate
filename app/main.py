@@ -1,22 +1,21 @@
-from fastapi import FastAPI, Request, Form, HTTPException, BackgroundTasks, Depends, status
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse, JSONResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-import logging
-import time
-import os
-import json
 import asyncio
-from datetime import datetime
-import uuid
-import sys
-import secrets
 import base64
+import json
+import logging
+import os
+import secrets
+import time
+import uuid
+from datetime import datetime
 
-from app.debate_engine import get_llm_function, LLM_OPTIONS
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from app.debate_engine import LLM_OPTIONS, get_llm_function
 
 # Ensure logs directory exists with proper permissions
 try:
@@ -166,7 +165,8 @@ async def create_debate(
 
     # Log the debate request
     logger.info(
-        f"Debate requested by {username} - Topic: '{topic}', Pro: {pro_llm}, Con: {con_llm}, Judge: {judge_llm}, Rounds: {rounds}"
+        f"Debate requested by {username} - Topic: '{topic}', "
+        f"Pro: {pro_llm}, Con: {con_llm}, Judge: {judge_llm}, Rounds: {rounds}"
     )
 
     # Validate inputs
@@ -271,13 +271,15 @@ async def get_debate_progress(debate_id: str, request: Request):
                 last_data = debate_progress[debate_id].copy()
                 last_heartbeat = current_time
                 logger.info(
-                    f"Sending progress update for debate {debate_id}: {debate_progress[debate_id]['status']} - {debate_progress[debate_id]['progress']}%"
+                    f"Sending progress update for debate {debate_id}: "
+                    f"{debate_progress[debate_id]['status']} - {debate_progress[debate_id]['progress']}%"
                 )
                 yield f"data: {update_data}\n\n"
             # Send heartbeat every 15 seconds to keep connection alive
             elif current_time - last_heartbeat > 15:
                 logger.info(
-                    f"Sending heartbeat for debate {debate_id} after {int(current_time - last_heartbeat)} seconds"
+                    f"Sending heartbeat for debate {debate_id} after "
+                    f"{int(current_time - last_heartbeat)} seconds"
                 )
                 yield ": heartbeat\n\n"
                 last_heartbeat = current_time
@@ -504,7 +506,10 @@ async def run_debate_background(
 
                 logger.info(f"Getting pro counter-argument for round {round_num + 1}")
                 try:
-                    pro_counter_prompt = f"Your opponent argued: {con_argument}\n\nCounter their argument while supporting: {topic}."
+                    pro_counter_prompt = (
+                        f"Your opponent argued: {con_argument}\n\n"
+                        f"Counter their argument while supporting: {topic}."
+                    )
                     pro_argument = pro_model(pro_counter_prompt)
                     logger.info(
                         f"Received pro counter-argument for round {round_num + 1} ({len(pro_argument)} chars)"
@@ -520,7 +525,10 @@ async def run_debate_background(
 
                 logger.info(f"Getting con counter-argument for round {round_num + 1}")
                 try:
-                    con_counter_prompt = f"Your opponent argued: {pro_argument}\n\nCounter their argument while opposing: {topic}."
+                    con_counter_prompt = (
+                        f"Your opponent argued: {pro_argument}\n\n"
+                        f"Counter their argument while opposing: {topic}."
+                    )
                     con_argument = con_model(con_counter_prompt)
                     logger.info(
                         f"Received con counter-argument for round {round_num + 1} ({len(con_argument)} chars)"
@@ -534,7 +542,11 @@ async def run_debate_background(
 
         logger.info(f"Getting debate summary from {judge_llm}")
         try:
-            judge_prompt = f"Summarize the key points of the debate on '{topic}', highlighting the strongest arguments for and against. Provide a balanced conclusion."
+            judge_prompt = (
+                f"Summarize the key points of the debate on '{topic}', "
+                "highlighting the strongest arguments for and against. "
+                "Provide a balanced conclusion."
+            )
             summary = judge_model(judge_prompt)
             logger.info(f"Received judge summary ({len(summary)} chars)")
             results["summary"] = summary

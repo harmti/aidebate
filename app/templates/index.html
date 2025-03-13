@@ -13,7 +13,7 @@
                 <form id="debate-form" action="/debate" method="post">
                     <div class="mb-3">
                         <label for="topic" class="form-label">Debate Topic</label>
-                        <input type="text" class="form-control" id="topic" name="topic" required 
+                        <input type="text" class="form-control" id="topic" name="topic" required
                                placeholder="Enter a topic for the debate...">
                         <div class="form-text">Be specific and clear about what you want the AIs to debate.</div>
                     </div>
@@ -58,7 +58,7 @@
                         <button id="submit-button" type="submit" class="btn btn-primary btn-lg">Start Debate</button>
                     </div>
                 </form>
-                
+
                 <!-- Loading indicator -->
                 <div id="loading-indicator" class="loading mt-3 text-center" style="display: none;">
                     <div class="spinner-border text-primary loading-spinner" role="status">
@@ -88,7 +88,7 @@
         const form = document.getElementById('debate-form');
         const submitButton = document.getElementById('submit-button');
         const loadingIndicator = document.getElementById('loading-indicator');
-        
+
         form.addEventListener('submit', function(event) {
             // Log the form submission
             console.log('Debate form submitted:', {
@@ -98,14 +98,14 @@
                 judge_llm: document.getElementById('judge_llm').value,
                 rounds: document.getElementById('rounds').value
             });
-            
+
             // Prevent double submission
             submitButton.disabled = true;
             submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
-            
+
             // Show loading indicator
             loadingIndicator.style.display = 'block';
         });
     });
 </script>
-{% endblock %} 
+{% endblock %}

@@ -28,4 +28,4 @@ echo -e "\n=== Container User ==="
 docker exec -it $CONTAINER id
 
 echo -e "\n=== Container Process List ==="
-docker exec -it $CONTAINER ps aux 
+docker exec -it $CONTAINER ps aux

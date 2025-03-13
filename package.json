@@ -1,0 +1,19 @@
+{
+  "name": "aidebate",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "format:js": "prettier --write 'app/static/js/**/*.js'",
+    "lint:js": "prettier --check 'app/static/js/**/*.js'",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.1.1"
+  },
+  "lint-staged": {
+    "*.py": "ruff format --check",
+    "*.js": "prettier --write"
+  }
+}

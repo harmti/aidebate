@@ -37,3 +37,15 @@ htmlcov/
 *.bak
 *.tmp
 *~
+
+# JavaScript/Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.npm
+.yarn-integrity
+package-lock.json
+
+# Ruff cache
+.ruff_cache/

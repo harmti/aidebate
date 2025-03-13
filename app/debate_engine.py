@@ -1,10 +1,11 @@
-import openai
-import anthropic
-import os
-import google.generativeai as genai
 import logging
+import os
 import time
-from typing import Dict, Callable, Any, Optional
+from typing import Any, Callable, Dict, Optional
+
+import anthropic
+import google.generativeai as genai
+import openai
 
 # Get logger
 logger = logging.getLogger("aidebate")
@@ -210,7 +211,11 @@ def run_debate(
 
     logger.info(f"Getting debate summary from {judge_llm}")
     try:
-        judge_prompt = f"Summarize the key points of the debate on '{topic}', highlighting the strongest arguments for and against. Provide a balanced conclusion."
+        judge_prompt = (
+            f"Summarize the key points of the debate on '{topic}', "
+            "highlighting the strongest arguments for and against. "
+            "Provide a balanced conclusion."
+        )
         summary = judge_model(judge_prompt)
         logger.info(f"Received judge summary ({len(summary)} chars)")
         results["summary"] = summary

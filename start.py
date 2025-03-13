@@ -5,6 +5,7 @@ This script is used by Railway to start the application.
 """
 
 import os
+
 import uvicorn
 
 if __name__ == "__main__":

@@ -30,4 +30,4 @@ Dockerfile
 .idea/
 .vscode/
 *.swp
-*.swo 
+*.swo

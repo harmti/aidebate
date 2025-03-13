@@ -99,8 +99,8 @@
 
                 <div class="progress-container">
                     <div class="progress">
-                        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                             role="progressbar" style="width: 0%;" 
+                        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar" style="width: 0%;"
                              aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
                     </div>
                 </div>
@@ -141,8 +141,8 @@
 </div>
 
 <!-- Hidden data for JavaScript -->
-<div id="debate-data" 
-     data-debate-id="{{ debate_id }}" 
+<div id="debate-data"
+     data-debate-id="{{ debate_id }}"
      data-rounds="{{ rounds }}">
 </div>
 {% endblock %}
@@ -154,9 +154,9 @@
         const dataElement = document.getElementById('debate-data');
         const debateId = dataElement.getAttribute('data-debate-id');
         const rounds = parseInt(dataElement.getAttribute('data-rounds'));
-        
+
         // Initialize progress tracking
         initProgressTracking(debateId, rounds);
     });
 </script>
-{% endblock %} 
+{% endblock %}
