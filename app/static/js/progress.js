@@ -497,12 +497,18 @@ function initProgressTracking(debateId, roundsCount) {
   addDebugInfo(`EventSource supported: ${typeof EventSource !== "undefined"}`);
   addDebugInfo(`XMLHttpRequest supported: ${typeof XMLHttpRequest !== "undefined"}`);
 
-  // Always use polling in Railway environment
-  usingPollingFallback = true;
-  setupPollingFallback();
-
   // Set up a check to verify the connection is still active
   let lastActivityTime = Date.now();
+
+  // Try to use SSE first, with polling as fallback
+  if (typeof EventSource !== "undefined") {
+    console.log("EventSource is supported, using SSE");
+    setupEventSource();
+  } else {
+    console.log("EventSource not supported, using polling fallback");
+    usingPollingFallback = true;
+    setupPollingFallback();
+  }
 
   // Function to check if connection is still active
   function checkConnection() {
