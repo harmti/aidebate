@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional
 import anthropic
 import google.generativeai as genai
 import openai
+import requests
 
 # Get logger
 logger = logging.getLogger("aidebate")
@@ -14,6 +15,8 @@ logger = logging.getLogger("aidebate")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GOOGLE_GEMINI_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
+GROK_API_KEY = os.getenv("GROK_API_KEY")
+GROK_API_URL = os.getenv("GROK_API_URL", "https://api.grok.ai/v1")
 
 # Initialize clients
 openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
@@ -82,17 +85,41 @@ def gemini_response(prompt: str) -> str:
         return "I apologize, but I encountered an error while generating a response."
 
 
+# Function to get response from Grok
+def grok_response(prompt: str) -> str:
+    start_time = time.time()
+    logger.info("Requesting response from Grok")
+
+    try:
+        headers = {"Authorization": f"Bearer {GROK_API_KEY}", "Content-Type": "application/json"}
+
+        payload = {"messages": [{"role": "user", "content": prompt}], "model": "grok-1"}
+
+        response = requests.post(f"{GROK_API_URL}/chat/completions", headers=headers, json=payload)
+
+        response.raise_for_status()
+        result = response.json()["choices"][0]["message"]["content"]
+
+        elapsed_time = time.time() - start_time
+        logger.info(f"Grok response received in {elapsed_time:.2f} seconds")
+
+        return result
+    except Exception as e:
+        logger.error(f"Error getting Grok response: {str(e)}")
+        return "I apologize, but I encountered an error while generating a response."
+
+
 # Function to select LLM
 def get_llm_function(name: str) -> Optional[Callable[[str], str]]:
     # Make case insensitive by converting to lowercase
     name_lower = name.lower() if name else ""
 
-    llm_map = {"chatgpt": chatgpt_response, "claude": claude_response, "gemini": gemini_response}
+    llm_map = {"chatgpt": chatgpt_response, "claude": claude_response, "gemini": gemini_response, "grok": grok_response}
     return llm_map.get(name_lower, None)
 
 
 # Available LLMs
-LLM_OPTIONS = ["ChatGPT", "Claude", "Gemini"]
+LLM_OPTIONS = ["ChatGPT", "Claude", "Gemini", "Grok"]
 
 
 # Run debate and capture results
@@ -129,7 +156,7 @@ def run_debate(
 
     if not pro_model or not con_model or not judge_model:
         logger.error(f"Invalid LLM selection: Pro={pro_llm}, Con={con_llm}, Judge={judge_llm}")
-        raise ValueError("Invalid LLM selection. Please use 'ChatGPT', 'Claude', or 'Gemini'.")
+        raise ValueError("Invalid LLM selection. Please use 'ChatGPT', 'Claude', 'Gemini', or 'Grok'.")
 
     # Initial arguments - Pro side
     if progress_callback:

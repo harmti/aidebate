@@ -1,6 +1,6 @@
 # AI Debate Platform
 
-A web application that facilitates debates between different AI language models (ChatGPT, Claude, and Gemini) on user-provided topics.
+A web application that facilitates debates between different AI language models (ChatGPT, Claude, Gemini, and Grok) on user-provided topics.
 
 ## Features
 
@@ -20,6 +20,7 @@ A web application that facilitates debates between different AI language models 
 - OpenAI API key
 - Anthropic API key
 - Google Gemini API key
+- Grok API key
 
 ## Installation
 
@@ -55,6 +56,8 @@ Set the following environment variables with your API keys:
 export OPENAI_API_KEY="your-openai-api-key"
 export ANTHROPIC_API_KEY="your-anthropic-api-key"
 export GOOGLE_GEMINI_API_KEY="your-google-gemini-api-key"
+export GROK_API_KEY="your-grok-api-key"
+export GROK_API_URL="https://api.grok.ai/v1"
 
 # Basic Authentication (optional, defaults shown)
 export ADMIN_USERNAME="admin"
@@ -67,6 +70,8 @@ On Windows, use:
 set OPENAI_API_KEY=your-openai-api-key
 set ANTHROPIC_API_KEY=your-anthropic-api-key
 set GOOGLE_GEMINI_API_KEY=your-google-gemini-api-key
+set GROK_API_KEY=your-grok-api-key
+set GROK_API_URL=https://api.grok.ai/v1
 set ADMIN_USERNAME=admin
 set ADMIN_PASSWORD=debate123
 ```
@@ -77,6 +82,8 @@ For Docker, create a `.env` file in the project root with the following content:
 OPENAI_API_KEY=your-openai-api-key
 ANTHROPIC_API_KEY=your-anthropic-api-key
 GOOGLE_GEMINI_API_KEY=your-google-gemini-api-key
+GROK_API_KEY=your-grok-api-key
+GROK_API_URL=https://api.grok.ai/v1
 
 # Basic Authentication (optional, defaults shown)
 ADMIN_USERNAME=admin
