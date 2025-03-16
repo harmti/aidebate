@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}AI Business Idea Generator - Home{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">Generate Business Ideas</h2>
+            </div>
+            <div class="card-body">
+                <form id="business-form" action="/business" method="post">
+                    <div class="mb-3">
+                        <label for="topic" class="form-label">Business Topic or Industry</label>
+                        <input type="text" class="form-control" id="topic" name="topic" required
+                               placeholder="Enter a topic or industry for business ideas...">
+                        <div class="form-text">Be specific about the domain you want business ideas for (e.g., "sustainable fashion", "elderly care tech", "food delivery innovation").</div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="generator_llm" class="form-label">Idea Generator</label>
+                            <select class="form-select" id="generator_llm" name="generator_llm">
+                                {% for llm in llm_options %}
+                                <option value="{{ llm }}" {% if llm == "ChatGPT" %}selected{% endif %}>{{ llm }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">AI that will generate the initial business ideas</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="critic_llm" class="form-label">Idea Critic</label>
+                            <select class="form-select" id="critic_llm" name="critic_llm">
+                                {% for llm in llm_options %}
+                                <option value="{{ llm }}" {% if llm == "Claude" %}selected{% endif %}>{{ llm }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">AI that will critique and evaluate the ideas</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="refiner_llm" class="form-label">Idea Refiner</label>
+                            <select class="form-select" id="refiner_llm" name="refiner_llm">
+                                {% for llm in llm_options %}
+                                <option value="{{ llm }}" {% if llm == "Gemini" %}selected{% endif %}>{{ llm }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">AI that will refine and improve the ideas</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="judge_llm" class="form-label">Final Judge</label>
+                            <select class="form-select" id="judge_llm" name="judge_llm">
+                                {% for llm in llm_options %}
+                                <option value="{{ llm }}" {% if llm == "Grok" %}selected{% endif %}>{{ llm }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">AI that will rank and select the best ideas</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="num_ideas" class="form-label">Number of Ideas</label>
+                        <input type="number" class="form-control" id="num_ideas" name="num_ideas" min="1" max="5" value="3">
+                        <div class="form-text">How many business ideas to generate (1-5)</div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary" id="submit-button">Generate Business Ideas</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="loading-indicator" style="display: none;">
+    <div class="row justify-content-center mt-4">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h4 id="progress-message">Processing your request...</h4>
+                    <div class="progress mt-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('business-form');
+        const submitButton = document.getElementById('submit-button');
+        const loadingIndicator = document.getElementById('loading-indicator');
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Store form data in localStorage for progress page
+            localStorage.setItem('businessFormData', JSON.stringify({
+                topic: document.getElementById('topic').value,
+                generator_llm: document.getElementById('generator_llm').value,
+                critic_llm: document.getElementById('critic_llm').value,
+                refiner_llm: document.getElementById('refiner_llm').value,
+                judge_llm: document.getElementById('judge_llm').value,
+                num_ideas: document.getElementById('num_ideas').value
+            }));
+
+            // Prevent double submission
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+
+            // Show loading indicator
+            loadingIndicator.style.display = 'block';
+
+            // Submit the form
+            form.submit();
+        });
+    });
+</script>
+{% endblock %}

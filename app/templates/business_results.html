@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Business Idea Results{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">Business Ideas for: {{ topic }}</h1>
+
+            <div class="mb-4">
+                <a href="/business_form" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Generate New Ideas
+                </a>
+            </div>
+
+            {% if ideas %}
+                {% for idea in ideas %}
+                <div class="card mb-4 idea-card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="mb-0">{{ idea.name }}</h3>
+                        <span class="badge bg-primary">Idea #{{ loop.index }}</span>
+                    </div>
+                    <div class="card-body">
+                        <h4>Description</h4>
+                        <p>{{ idea.description }}</p>
+
+                        {% if idea.target_audience %}
+                        <h4>Target Audience</h4>
+                        <p>{{ idea.target_audience }}</p>
+                        {% endif %}
+
+                        {% if idea.value_proposition %}
+                        <h4>Value Proposition</h4>
+                        <p>{{ idea.value_proposition }}</p>
+                        {% endif %}
+
+                        {% if idea.revenue_model %}
+                        <h4>Revenue Model</h4>
+                        <p>{{ idea.revenue_model }}</p>
+                        {% endif %}
+
+                        {% if idea.critique %}
+                        <h4 class="mt-4">Critique</h4>
+                        <p>{{ idea.critique.summary }}</p>
+
+                        <div class="scores mt-3">
+                            {% if idea.critique.feasibility %}
+                            <div>
+                                <small>Feasibility: {{ idea.critique.feasibility.score }}/10</small>
+                                <div class="progress score-meter">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ idea.critique.feasibility.score * 10 }}%;" aria-valuenow="{{ idea.critique.feasibility.score }}" aria-valuemin="0" aria-valuemax="10"></div>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if idea.critique.market_potential %}
+                            <div>
+                                <small>Market Potential: {{ idea.critique.market_potential.score }}/10</small>
+                                <div class="progress score-meter">
+                                    <div class="progress-bar bg-info" role="progressbar" style="width: {{ idea.critique.market_potential.score * 10 }}%;" aria-valuenow="{{ idea.critique.market_potential.score }}" aria-valuemin="0" aria-valuemax="10"></div>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if idea.critique.technical_complexity %}
+                            <div>
+                                <small>Technical Simplicity: {{ idea.critique.technical_complexity.score }}/10</small>
+                                <div class="progress score-meter">
+                                    <div class="progress-bar bg-warning" role="progressbar" style="width: {{ idea.critique.technical_complexity.score * 10 }}%;" aria-valuenow="{{ idea.critique.technical_complexity.score }}" aria-valuemin="0" aria-valuemax="10"></div>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if idea.critique.monetization_viability %}
+                            <div>
+                                <small>Monetization: {{ idea.critique.monetization_viability.score }}/10</small>
+                                <div class="progress score-meter">
+                                    <div class="progress-bar bg-danger" role="progressbar" style="width: {{ idea.critique.monetization_viability.score * 10 }}%;" aria-valuenow="{{ idea.critique.monetization_viability.score }}" aria-valuemin="0" aria-valuemax="10"></div>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if idea.critique.competitive_landscape %}
+                            <h5 class="mt-3">Potential Competitors</h5>
+                            <ul class="competitor-list">
+                                {% for competitor in idea.critique.competitive_landscape %}
+                                <li>{{ competitor }}</li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        {% if idea.refinement %}
+                        <h4 class="mt-4">Refinements</h4>
+                        <p>{{ idea.refinement.summary }}</p>
+
+                        {% if idea.refinement.improvements %}
+                        <h5>Improvements</h5>
+                        <ul>
+                            {% for improvement in idea.refinement.improvements %}
+                            <li>{{ improvement }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info">
+                    No business ideas have been generated yet. Please try again.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .idea-card {
+        border-left: 5px solid #007bff;
+    }
+    .score-meter {
+        height: 10px;
+        margin-bottom: 15px;
+    }
+    .competitor-list {
+        columns: 2;
+    }
+    @media (max-width: 768px) {
+        .competitor-list {
+            columns: 1;
+        }
+    }
+</style>
+{% endblock %}

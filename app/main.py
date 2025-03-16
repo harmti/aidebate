@@ -10,11 +10,12 @@ from datetime import datetime
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.business_engine import run_business_idea_generation
 from app.debate_engine import LLM_OPTIONS, get_llm_function
 
 # Ensure logs directory exists with proper permissions
@@ -57,8 +58,13 @@ else:
 # Get logger for this application
 logger = logging.getLogger("aidebate")
 
-# Store for debate progress
+# In-memory storage for debate progress and results
 debate_progress = {}
+debate_results = {}
+
+# In-memory storage for business idea generation progress and results
+business_progress = {}
+business_results = {}
 
 # Get credentials from environment variables or use defaults
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
@@ -167,6 +173,16 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Set up Jinja2 templates with custom URL generation
 templates = Jinja2Templates(directory="app/templates")
+
+
+# Add nl2br filter to convert newlines to <br> tags
+def nl2br(value):
+    if value:
+        return value.replace("\n", "<br>")
+    return value
+
+
+templates.env.filters["nl2br"] = nl2br
 
 # Override the url_for method to ensure HTTPS URLs in Railway environment
 original_url_for = templates.env.globals["url_for"]
@@ -638,6 +654,197 @@ async def run_debate_background(debate_id: str, topic: str, pro_llm: str, con_ll
             "error": str(e),
             "completed": True,
         }
+
+
+@app.get("/business_form", response_class=HTMLResponse)
+async def business_form(request: Request):
+    """Render the business idea generation form."""
+    username = getattr(request.state, "username", "unknown")
+    logger.info(f"Business idea form accessed by {username} from {request.client.host}")
+    return templates.TemplateResponse("business.html", {"request": request, "llm_options": LLM_OPTIONS})
+
+
+@app.get("/business", response_class=HTMLResponse)
+async def business_redirect(request: Request):
+    """Redirect to the business form page."""
+    username = getattr(request.state, "username", "unknown")
+    logger.info(f"Business redirect accessed by {username} from {request.client.host}")
+    return RedirectResponse(url="/business_form", status_code=303)
+
+
+@app.post("/business", response_class=HTMLResponse)
+async def create_business_ideas(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    topic: str = Form(...),
+    generator_llm: str = Form("ChatGPT"),
+    critic_llm: str = Form("Claude"),
+    refiner_llm: str = Form("Gemini"),
+    judge_llm: str = Form("Grok"),
+    num_ideas: int = Form(3),
+):
+    """Start business idea generation in the background and redirect to progress page."""
+    username = getattr(request.state, "username", "unknown")
+
+    # Log the business idea generation request
+    logger.info(
+        f"Business idea generation requested by {username} - Topic: '{topic}', "
+        f"Generator: {generator_llm}, Critic: {critic_llm}, "
+        f"Refiner: {refiner_llm}, Judge: {judge_llm}, Num Ideas: {num_ideas}"
+    )
+
+    # Validate inputs
+    if not topic:
+        logger.warning("Empty topic submitted")
+        raise HTTPException(status_code=400, detail="Topic cannot be empty")
+
+    if num_ideas < 1 or num_ideas > 5:
+        logger.warning(f"Invalid number of ideas: {num_ideas}")
+        raise HTTPException(status_code=400, detail="Number of ideas must be between 1 and 5")
+
+    # Generate a unique ID for this business idea generation
+    business_id = str(uuid.uuid4())
+
+    # Initialize progress tracking
+    business_progress[business_id] = {
+        "status": "starting",
+        "stage": "initializing",
+        "message": "Initializing business idea generation...",
+        "completed": False,
+        "error": False,
+        "topic": topic,
+        "generator_llm": generator_llm,
+        "critic_llm": critic_llm,
+        "refiner_llm": refiner_llm,
+        "judge_llm": judge_llm,
+        "num_ideas": num_ideas,
+    }
+
+    # Start the business idea generation in the background
+    background_tasks.add_task(
+        run_business_idea_generation_task,
+        business_id,
+        topic,
+        generator_llm,
+        critic_llm,
+        refiner_llm,
+        judge_llm,
+        num_ideas,
+    )
+
+    # Redirect to the progress page
+    return templates.TemplateResponse("business_progress.html", {"request": request, "business_id": business_id})
+
+
+@app.get("/business_progress/{business_id}", response_class=JSONResponse)
+async def get_business_progress(business_id: str, request: Request):
+    """Get the progress of a business idea generation."""
+
+    # Check if the business ID exists
+    if business_id not in business_progress:
+        logger.warning(f"Business ID not found: {business_id}")
+        return JSONResponse(
+            content={"status": "error", "message": "Business idea generation not found"},
+            status_code=404,
+        )
+
+    # Return the current progress
+    logger.debug(f"Returning business progress for {business_id}")
+    return JSONResponse(content=business_progress[business_id])
+
+
+@app.get("/business_results/{business_id}", response_class=HTMLResponse)
+async def get_business_results(business_id: str, request: Request):
+    """Get the results of a business idea generation."""
+
+    # Check if the business ID exists
+    if business_id not in business_results:
+        logger.warning(f"Business results not found: {business_id}")
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "error_title": "Business Ideas Not Found",
+                "error_message": "The requested business idea generation results could not be found.",
+            },
+        )
+
+    # Return the results
+    logger.info(f"Returning business results for {business_id}")
+    return templates.TemplateResponse(
+        "business_results.html",
+        {
+            "request": request,
+            "topic": business_results[business_id]["topic"],
+            "ideas": business_results[business_id]["ideas"],
+        },
+    )
+
+
+async def run_business_idea_generation_task(
+    business_id: str,
+    topic: str,
+    generator_llm: str,
+    critic_llm: str,
+    refiner_llm: str,
+    judge_llm: str,
+    num_ideas: int,
+):
+    """Run the business idea generation task in the background."""
+    logger.info(f"Starting business idea generation task for {business_id}")
+
+    try:
+        # Update progress callback function
+        def update_progress(stage, message):
+            business_progress[business_id]["stage"] = stage
+            business_progress[business_id]["message"] = message
+
+            # Update status based on stage
+            if stage in ["step1", "generating"]:
+                business_progress[business_id]["status"] = "generating"
+            elif stage in ["step2", "critiquing"]:
+                business_progress[business_id]["status"] = "critiquing"
+            elif stage in ["step3", "refining"]:
+                business_progress[business_id]["status"] = "refining"
+            elif stage in ["step4", "ranking"]:
+                business_progress[business_id]["status"] = "ranking"
+            elif stage == "completed":
+                business_progress[business_id]["status"] = "completed"
+                business_progress[business_id]["completed"] = True
+
+        # Run the business idea generation
+        results = run_business_idea_generation(
+            topic=topic,
+            generator_llm=generator_llm,
+            critic_llm=critic_llm,
+            refiner_llm=refiner_llm,
+            judge_llm=judge_llm,
+            num_ideas=num_ideas,
+            progress_callback=update_progress,
+        )
+
+        # Store the results
+        business_results[business_id] = results
+
+        # Update progress to completed
+        business_progress[business_id]["status"] = "completed"
+        business_progress[business_id]["completed"] = True
+        business_progress[business_id]["message"] = "Business idea generation completed successfully!"
+
+        logger.info(f"Business idea generation completed for {business_id}")
+
+    except Exception as e:
+        # Log the error
+        logger.error(f"Error in business idea generation task: {str(e)}")
+        logger.exception("Exception details:")
+
+        # Update progress with error
+        business_progress[business_id]["status"] = "error"
+        business_progress[business_id]["error"] = True
+        business_progress[business_id]["message"] = f"Error: {str(e)}"
+
+        # Create empty results to avoid errors
+        business_results[business_id] = {"topic": topic, "ideas": []}
 
 
 if __name__ == "__main__":
